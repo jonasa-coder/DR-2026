@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NRW Prüffahrten 2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0c10; --panel:#111318; --border:#1e2330;
+  --accent:#e8ff3a; --accent2:#3affb8; --text:#c8cfd8; --dim:#4a5260;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:"DM Mono",monospace;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+header{padding:10px 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;}
+header h1{font-family:"Bebas Neue",sans-serif;font-size:1.8rem;letter-spacing:3px;color:var(--accent);line-height:1;}
+.subtitle{font-size:0.58rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;}
+
+.km-hero{
+  margin-left:auto;
+  background:linear-gradient(135deg,#071a12,#0a1f16);
+  border:1px solid rgba(58,255,184,0.35);
+  border-radius:6px;padding:8px 22px;text-align:center;
+  box-shadow:0 0 20px rgba(58,255,184,0.1);
+}
+.km-label{font-size:0.52rem;color:var(--dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:1px;}
+.km-value{font-family:"Bebas Neue",sans-serif;font-size:3.2rem;color:var(--accent2);letter-spacing:4px;line-height:1;text-shadow:0 0 24px rgba(58,255,184,0.6);}
+.km-unit{font-size:0.6rem;color:var(--accent2);opacity:0.55;letter-spacing:2px;}
+
+.main{display:flex;flex:1;overflow:hidden;}
+#map{flex:1;}
+
+.sidebar{width:300px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+
+.controls{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:7px;align-items:center;}
+.btn{background:var(--accent);color:#000;border:none;padding:6px 13px;font-family:"DM Mono",monospace;font-weight:500;font-size:0.7rem;letter-spacing:1px;cursor:pointer;text-transform:uppercase;transition:opacity 0.15s;}
+.btn:hover{opacity:0.85;}
+.btn.sec{background:transparent;color:var(--text);border:1px solid var(--border);}
+.btn.sec:hover{border-color:var(--accent);color:var(--accent);}
+.speed-wrap{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:0.6rem;color:var(--dim);}
+select{background:var(--bg);color:var(--text);border:1px solid var(--border);padding:3px 5px;font-family:"DM Mono",monospace;font-size:0.65rem;}
+
+.progress-bar{height:3px;background:var(--border);flex-shrink:0;}
+.progress-fill{height:100%;background:var(--accent);transition:width 0.3s;width:0%;}
+
+.current-trip{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.trip-label{font-size:0.5rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:3px;}
+.trip-date{font-size:0.68rem;color:var(--accent);margin-bottom:1px;}
+.trip-dest{font-size:0.95rem;color:var(--text);font-weight:500;}
+.trip-km{font-size:0.65rem;color:var(--dim);margin-top:2px;}
+
+.section-head{padding:7px 14px 5px;font-size:0.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:6px;}
+.sort-toggle{margin-left:auto;display:flex;gap:4px;}
+.sort-btn{font-size:0.53rem;padding:2px 7px;cursor:pointer;border:1px solid var(--border);color:var(--dim);background:transparent;font-family:"DM Mono",monospace;transition:all 0.15s;}
+.sort-btn.active{border-color:var(--accent2);color:var(--accent2);}
+
+.name-table{overflow-y:auto;padding:4px 0;min-height:0;}
+.name-table::-webkit-scrollbar{width:3px;}
+.name-table::-webkit-scrollbar-thumb{background:var(--border);}
+.name-row{display:flex;align-items:center;padding:4px 14px;gap:7px;}
+.name-rank{font-size:0.56rem;color:var(--dim);width:15px;text-align:right;flex-shrink:0;}
+.name-label{font-size:0.7rem;color:var(--text);width:78px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.name-bar-wrap{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.name-bar{height:100%;background:var(--accent2);border-radius:2px;transition:width 0.5s;}
+.name-count{font-size:0.65rem;color:var(--dim);width:54px;text-align:right;flex-shrink:0;white-space:nowrap;}
+
+.log-section{border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;height:220px;}
+.log{overflow-y:auto;flex:1;padding:4px 0;}
+.log::-webkit-scrollbar{width:3px;}
+.log::-webkit-scrollbar-thumb{background:var(--border);}
+.log-entry{padding:3px 14px;font-size:0.63rem;color:var(--dim);display:flex;gap:7px;align-items:baseline;}
+.log-entry.active{color:var(--text);}
+.log-date{color:var(--accent);flex-shrink:0;font-size:0.58rem;}
+.log-dest{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.log-km{color:var(--accent2);flex-shrink:0;}
+
+.leaflet-container{background:#0d1018!important;}
+.leaflet-tile{filter:brightness(0.28) saturate(0.3) hue-rotate(200deg);}
+
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(232,255,58,0.6);}
+  70%{box-shadow:0 0 0 8px rgba(232,255,58,0);}
+  100%{box-shadow:0 0 0 0 rgba(232,255,58,0);}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>NRW Prüffahrten 2026</h1>
+    <div class="subtitle">Chronologische Routenvisualisierung · Stand Mai 2026</div>
+  </div>
+  <div class="km-hero">
+    <div class="km-label">Gesamtkilometer</div>
+    <div class="km-value" id="kmCounter">0</div>
+    <div class="km-unit">KM</div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map"></div>
+  <div class="sidebar">
+    <div class="controls">
+      <button class="btn" id="playBtn" onclick="togglePlay()">▶ Start</button>
+      <button class="btn sec" onclick="resetAll()">↺ Reset</button>
+      <div class="speed-wrap">
+        Tempo
+        <select id="speedSel">
+          <option value="1400">Langsam</option>
+          <option value="750" selected>Normal</option>
+          <option value="350">Schnell</option>
+        </select>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="current-trip">
+      <div class="trip-label">Aktuelle Fahrt</div>
+      <div class="trip-date" id="tripDate">–</div>
+      <div class="trip-dest" id="tripDest">Warten auf Start…</div>
+      <div class="trip-km" id="tripKm"></div>
+    </div>
+
+    <div class="section-head">
+      Top Prüfpartner
+      <div class="sort-toggle">
+        <button class="sort-btn active" id="sortEinsätze" onclick="setSort('einsaetze')">Einsätze</button>
+        <button class="sort-btn" id="sortKm" onclick="setSort('km')">Kilometer</button>
+      </div>
+    </div>
+    <div class="name-table" id="nameTable"></div>
+
+    <div class="log-section">
+      <div class="section-head">Fahrtprotokoll</div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DÜSSELDORF = [51.2217, 6.7762];
+
+// Heatmap color based on visit count
+function heatColor(visits) {
+  if (visits === 1) return '#7fff7f';       // hell grün
+  if (visits === 2) return '#39e75f';       // grün
+  if (visits === 3) return '#b8e000';       // gelbgrün
+  if (visits === 4) return '#ffcc00';       // gelb-orange
+  if (visits === 5) return '#ff8800';       // orange
+  return '#ff3322';                         // rot
+}
+function heatSize(visits) {
+  return Math.min(6 + visits * 2.5, 22);
+}
+function lineOpacity(visits) {
+  return Math.min(0.5 + visits * 0.1, 0.9);
+}
+
+const trips = [
+  {date:"05.01.2026",dest:"Oberhausen / Gelsenkirchen",km:133,total:133,coords:[51.4956,6.8625],partners:["Deux",null,null]},
+  {date:"06.01.2026",dest:"Köln / Hürth",km:103,total:236,coords:[50.9333,6.8667],partners:["Exner",null,null]},
+  {date:"07.01.2026",dest:"Witten",km:117,total:353,coords:[51.4443,7.3529],partners:["Exner",null,null]},
+  {date:"13.01.2026",dest:"Geldern",km:136,total:489,coords:[51.5186,6.3253],partners:["Nowicki",null,null]},
+  {date:"14.01.2026",dest:"Neuss",km:26,total:515,coords:[51.1985,6.6942],partners:["Preuß",null,null]},
+  {date:"15.01.2026",dest:"Detmold",km:402,total:917,coords:[51.9375,8.8797],partners:["Nowicki",null,null]},
+  {date:"19.01.2026",dest:"Bonn",km:149,total:1066,coords:[50.7374,7.0982],partners:["Nowicki",null,null]},
+  {date:"21.01.2026",dest:"Essen",km:69,total:1135,coords:[51.4556,7.0116],partners:["Preuß",null,null]},
+  {date:"27.01.2026",dest:"Düren",km:160,total:1295,coords:[50.8037,6.4847],partners:["Islami",null,null]},
+  {date:"28.01.2026",dest:"Köln",km:95,total:1390,coords:[50.9333,6.9600],partners:["Exner",null,null]},
+  {date:"29.01.2026",dest:"Münster",km:250,total:1640,coords:[51.9607,7.6261],partners:["Graf",null,null]},
+  {date:"02.02.2026",dest:"Köln",km:104,total:1744,coords:[50.9380,6.9650],partners:["Bings",null,null]},
+  {date:"10.02.2026",dest:"Duisburg",km:71,total:1815,coords:[51.4349,6.7623],partners:["Schmiegelt",null,null]},
+  {date:"11.02.2026",dest:"Hamm",km:224,total:2039,coords:[51.6804,7.8168],partners:["Graf","Nowicki","Bings"]},
+  {date:"16.02.2026",dest:"Soest",km:227,total:2266,coords:[51.5711,8.1089],partners:["Aksoy",null,null]},
+  {date:"17.02.2026",dest:"Verl",km:344,total:2610,coords:[51.8836,8.5157],partners:["Islami",null,null]},
+  {date:"23.02.2026",dest:"Mönchengladbach",km:84,total:2694,coords:[51.1805,6.4428],partners:["Weber",null,null]},
+  {date:"24.02.2026",dest:"Moers",km:90,total:2784,coords:[51.4530,6.6263],partners:["Schmiegelt",null,null]},
+  {date:"26.02.2026",dest:"Monheim / Erkrath",km:59,total:2843,coords:[51.0987,6.9032],partners:["Nowicki",null,null]},
+  {date:"05.03.2026",dest:"Lippstadt",km:277,total:3120,coords:[51.6740,8.3450],partners:["Schäfer",null,null]},
+  {date:"09.03.2026",dest:"Wuppertal",km:67,total:3187,coords:[51.2562,7.1508],partners:["Preuß","Exner","Maas"]},
+  {date:"11.03.2026",dest:"Bergisch Gladbach",km:111,total:3298,coords:[50.9833,7.1333],partners:["Islami",null,null]},
+  {date:"12.03.2026",dest:"Dorsten",km:122,total:3420,coords:[51.6603,6.9655],partners:["Preuß",null,null]},
+  {date:"16.03.2026",dest:"Gladbeck",km:102,total:3522,coords:[51.5714,6.9881],partners:["Schmiegelt",null,null]},
+  {date:"17.03.2026",dest:"Blomberg",km:415,total:3937,coords:[51.9424,9.0849],partners:["Weber",null,null]},
+  {date:"19.03.2026",dest:"Wuppertal",km:74,total:4011,coords:[51.2580,7.1520],partners:["Nowicki",null,null]},
+  {date:"23.03.2026",dest:"Kaarst / Grevenbroich",km:63,total:4074,coords:[51.2219,6.6158],partners:["Bings",null,null]},
+  {date:"26.03.2026",dest:"Bielefeld",km:364,total:4438,coords:[52.0302,8.5325],partners:["Wagner","Nowicki",null]},
+  {date:"30.03.2026",dest:"Gummersbach",km:168,total:4606,coords:[51.0258,7.5652],partners:["Aksoy",null,null]},
+  {date:"31.03.2026",dest:"Detmold",km:386,total:4992,coords:[51.9375,8.8820],partners:["Weber",null,null]},
+  {date:"07.04.2026",dest:"Witten",km:121,total:5113,coords:[51.4460,7.3540],partners:["Kieslich",null,null]},
+  {date:"13.04.2026",dest:"Monheim",km:44,total:5157,coords:[51.0990,6.9020],partners:["Kieslich",null,null]},
+  {date:"15.04.2026",dest:"Gelsenkirchen",km:113,total:5270,coords:[51.5177,7.0857],partners:["Exner",null,null]},
+  {date:"28.04.2026",dest:"Gladbeck",km:113,total:5383,coords:[51.5730,6.9900],partners:["Schäfer",null,null]},
+  {date:"04.05.2026",dest:"Espelkamp",km:467,total:5850,coords:[52.3769,8.6239],partners:["Schmiegelt",null,null]},
+  {date:"05.05.2026",dest:"Kerpen",km:120,total:5970,coords:[50.8710,6.6960],partners:["Madla",null,null]},
+  {date:"11.05.2026",dest:"Remscheid",km:88,total:6058,coords:[51.1792,7.1894],partners:["Bings",null,null]},
+  {date:"13.05.2026",dest:"Duisburg",km:79,total:6137,coords:[51.4380,6.7650],partners:["Schulz",null,null]},
+  {date:"18.05.2026",dest:"Essen",km:115,total:6252,coords:[51.4580,7.0140],partners:["Schmiegelt",null,null]},
+];
+
+// NRW boundary (simplified polygon)
+const NRW_BORDER = [[51.0521,5.8659],[51.0782,5.9782],[51.1652,6.1062],[51.1944,6.1568],[51.2347,6.1823],[51.2860,6.2101],[51.3518,6.2212],[51.4033,6.1761],[51.4560,6.1268],[51.4892,6.0956],[51.5312,6.0557],[51.5791,6.0441],[51.6408,6.0798],[51.6912,6.1590],[51.7213,6.2266],[51.7630,6.2964],[51.8101,6.3794],[51.8302,6.4687],[51.8421,6.5560],[51.8760,6.6240],[51.9201,6.6857],[51.9640,6.7239],[52.0180,6.7390],[52.0680,6.7502],[52.1340,6.7659],[52.2078,6.7802],[52.2791,6.7702],[52.3340,6.7440],[52.3834,6.6924],[52.3985,6.6332],[52.4049,6.5668],[52.4162,6.5022],[52.4329,6.4400],[52.4580,6.3978],[52.5071,6.3720],[52.5218,6.4020],[52.5309,6.4640],[52.5344,6.5312],[52.5222,6.6014],[52.4980,6.6658],[52.4701,6.7360],[52.4422,6.8068],[52.4201,6.8791],[52.3980,6.9601],[52.3820,7.0421],[52.3750,7.1320],[52.3791,7.2320],[52.3969,7.3191],[52.4209,7.4068],[52.4489,7.5002],[52.4780,7.5972],[52.5008,7.6891],[52.5130,7.7861],[52.5122,7.8831],[52.5031,7.9773],[52.4890,8.0650],[52.4720,8.1521],[52.4530,8.2402],[52.4399,8.3337],[52.4350,8.4261],[52.4378,8.5179],[52.4461,8.6062],[52.4580,8.6882],[52.1739,8.9619],[52.1009,8.9301],[51.9870,8.9821],[51.9391,8.9620],[51.9000,8.9112],[51.8640,8.8501],[51.8320,8.7788],[51.7980,8.7172],[51.7680,8.6499],[51.7461,8.5820],[51.7260,8.5141],[51.7010,8.4480],[51.6790,8.3808],[51.6519,8.3129],[51.6241,8.2448],[51.5930,8.1807],[51.5601,8.1228],[51.5351,8.0820],[51.5110,8.0399],[51.4860,7.9960],[51.4611,7.9520],[51.4330,7.9132],[51.3958,7.8982],[51.3571,7.8800],[51.3231,7.8621],[51.2880,7.8400],[51.2561,7.8040],[51.2251,7.7559],[51.1960,7.7002],[51.1670,7.6408],[51.1390,7.5791],[51.1111,7.5152],[51.0820,7.4472],[51.0519,7.3762],[51.0239,7.3051],[50.9980,7.2329],[50.9780,7.1629],[50.9589,7.0922],[50.9410,7.0221],[50.9251,6.9550],[50.9162,6.8832],[50.9120,6.8072],[50.9120,6.7222],[50.9162,6.6362],[50.9240,6.5552],[50.9381,6.4820],[50.9569,6.4139],[50.9791,6.3480],[51.0009,6.2870],[51.0191,6.2280],[51.0330,6.1750],[51.0421,6.1230],[51.0470,6.0720],[51.0521,5.8659]];
+
+let map, currentStep=-1, playing=false, timer=null;
+let visitCount={}, visitLines={}, visitMarkers={};
+let nameCounts={}, nameKm={};
+let sortMode='einsaetze';
+
+function initMap(){
+  map = L.map('map',{zoomControl:false,attributionControl:false}).setView([51.5,7.5],8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:14}).addTo(map);
+
+  // NRW border neon white
+  L.polygon(NRW_BORDER,{
+    color:'rgba(255,255,255,0.85)',
+    weight:2,
+    fill:false,
+    dashArray:'4,3',
+  }).addTo(map);
+
+  // Düsseldorf base marker
+  const el = document.createElement('div');
+  el.style.cssText='width:14px;height:14px;border-radius:50%;background:#3affb8;border:2px solid #0a0c10;box-shadow:0 0 10px #3affb8;';
+  L.marker(DÜSSELDORF,{icon:L.divIcon({className:'',html:el.outerHTML,iconSize:[14,14],iconAnchor:[7,7]})})
+    .addTo(map).bindTooltip('Düsseldorf (Basis)',{permanent:false});
+}
+
+function togglePlay(){
+  playing=!playing;
+  document.getElementById('playBtn').textContent=playing?'⏸ Pause':'▶ Weiter';
+  if(playing) advance();
+}
+
+function advance(){
+  if(!playing) return;
+  currentStep++;
+  if(currentStep>=trips.length){
+    playing=false;
+    document.getElementById('playBtn').textContent='✓ Fertig';
+    return;
+  }
+  showTrip(currentStep);
+  const speed=parseInt(document.getElementById('speedSel').value);
+  timer=setTimeout(advance,speed);
+}
+
+function showTrip(i){
+  const t=trips[i];
+  const key=t.dest;
+
+  // visit count for this location
+  visitCount[key]=(visitCount[key]||0)+1;
+  const v=visitCount[key];
+  const col=heatColor(v);
+  const sz=heatSize(v);
+  const op=lineOpacity(v);
+
+  // Update or draw line
+  if(visitLines[key]){
+    map.removeLayer(visitLines[key]);
+  }
+  visitLines[key]=L.polyline([DÜSSELDORF,t.coords],{
+    color:col, weight:2+v*0.4, opacity:op, dashArray:'6,4'
+  }).addTo(map);
+
+  // Update or draw marker
+  if(visitMarkers[key]){
+    map.removeLayer(visitMarkers[key]);
+  }
+  const half=sz/2;
+  const el=document.createElement('div');
+  el.style.cssText=`width:${sz}px;height:${sz}px;border-radius:50%;background:${col};border:2px solid #0a0c10;box-shadow:0 0 ${sz}px ${col}80;animation:pulse 1.5s infinite;`;
+  visitMarkers[key]=L.marker(t.coords,{
+    icon:L.divIcon({className:'',html:el.outerHTML,iconSize:[sz,sz],iconAnchor:[half,half]})
+  }).addTo(map).bindTooltip(`${t.dest}<br>${v}× besucht`,{permanent:false});
+
+  // Progress
+  document.getElementById('progressFill').style.width=((i+1)/trips.length*100)+'%';
+
+  // KM counter animate
+  animateKm(i>0?trips[i-1].total:0,t.total);
+
+  // Current trip panel
+  document.getElementById('tripDate').textContent=t.date;
+  document.getElementById('tripDest').textContent=t.dest;
+  const pNames=t.partners.filter(Boolean);
+  document.getElementById('tripKm').textContent=`+${t.km} km · ${pNames.join(', ')}`;
+
+  // Name counts + km
+  pNames.forEach(p=>{
+    nameCounts[p]=(nameCounts[p]||0)+1;
+    nameKm[p]=(nameKm[p]||0)+t.km;
+  });
+  renderNameTable();
+  addLog(t);
+}
+
+let kmAnim=null;
+function animateKm(from,to){
+  if(kmAnim) clearInterval(kmAnim);
+  const el=document.getElementById('kmCounter');
+  const steps=35, diff=to-from;
+  let s=0;
+  kmAnim=setInterval(()=>{
+    s++;
+    el.textContent=Math.round(from+diff*(s/steps)).toLocaleString('de-DE');
+    if(s>=steps){clearInterval(kmAnim);el.textContent=to.toLocaleString('de-DE');}
+  },15);
+}
+
+function setSort(mode){
+  sortMode=mode;
+  document.getElementById('sortEinsätze').classList.toggle('active',mode==='einsaetze');
+  document.getElementById('sortKm').classList.toggle('active',mode==='km');
+  renderNameTable();
+}
+
+function renderNameTable(){
+  let entries=Object.entries(nameCounts);
+  if(sortMode==='km'){
+    entries.sort((a,b)=>(nameKm[b[0]]||0)-(nameKm[a[0]]||0));
+  } else {
+    entries.sort((a,b)=>b[1]-a[1]);
+  }
+  const maxVal=sortMode==='km'
+    ? Math.max(...entries.map(([n])=>nameKm[n]||0))
+    : (entries[0]?entries[0][1]:1);
+
+  const html=entries.map(([name,count],idx)=>{
+    const barVal=sortMode==='km'?(nameKm[name]||0):count;
+    const pct=maxVal?barVal/maxVal*100:0;
+    const secondary=sortMode==='km'
+      ? `${(nameKm[name]||0).toLocaleString('de-DE')} km`
+      : `${count}× / ${(nameKm[name]||0).toLocaleString('de-DE')} km`;
+    return `<div class="name-row">
+      <div class="name-rank">${idx+1}</div>
+      <div class="name-label">${name}</div>
+      <div class="name-bar-wrap"><div class="name-bar" style="width:${pct}%"></div></div>
+      <div class="name-count">${secondary}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('nameTable').innerHTML=html;
+}
+
+function addLog(t){
+  const log=document.getElementById('log');
+  const div=document.createElement('div');
+  div.className='log-entry active';
+  div.innerHTML=`<span class="log-date">${t.date}</span><span class="log-dest">${t.dest}</span><span class="log-km">+${t.km}</span>`;
+  log.prepend(div);
+  [...log.querySelectorAll('.log-entry.active')].slice(1).forEach(e=>e.classList.remove('active'));
+}
+
+function resetAll(){
+  playing=false;
+  if(timer) clearTimeout(timer);
+  document.getElementById('playBtn').textContent='▶ Start';
+  currentStep=-1;
+  visitCount={}; visitLines={}; visitMarkers={};
+  nameCounts={}; nameKm={};
+  // remove all layers except base
+  map.eachLayer(l=>{
+    if(l instanceof L.Polyline || (l instanceof L.Marker && l.getLatLng().lat!==DÜSSELDORF[0])){
+      map.removeLayer(l);
+    }
+  });
+  document.getElementById('kmCounter').textContent='0';
+  document.getElementById('progressFill').style.width='0%';
+  document.getElementById('tripDate').textContent='–';
+  document.getElementById('tripDest').textContent='Warten auf Start…';
+  document.getElementById('tripKm').textContent='';
+  document.getElementById('nameTable').innerHTML='';
+  document.getElementById('log').innerHTML='';
+}
+
+initMap();
+</script>
+</body>
+</html>
