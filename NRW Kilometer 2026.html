@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NRW Prüffahrten 2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10;
+    --panel: #111318;
+    --border: #1e2330;
+    --accent: #e8ff3a;
+    --accent2: #3affb8;
+    --text: #c8cfd8;
+    --dim: #4a5260;
+    --line: rgba(232,255,58,0.7);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Mono',monospace; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  header {
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  header h1 { font-family:'Bebas Neue',sans-serif; font-size:2rem; letter-spacing:3px; color:var(--accent); line-height:1; }
+  header .subtitle { font-size:0.65rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; }
+
+  .km-display {
+    margin-left: auto;
+    text-align: right;
+  }
+  .km-label { font-size:0.6rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; }
+  .km-value { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; color:var(--accent2); letter-spacing:2px; line-height:1; }
+  .km-unit { font-size:0.7rem; color:var(--dim); }
+
+  .main { display:flex; flex:1; overflow:hidden; }
+
+  #map { flex:1; }
+
+  .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .controls {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 7px 16px;
+    font-family:'DM Mono',monospace;
+    font-weight:500;
+    font-size:0.75rem;
+    letter-spacing:1px;
+    cursor:pointer;
+    text-transform:uppercase;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity:0.85; }
+  .btn.secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn.secondary:hover { border-color:var(--accent); color:var(--accent); }
+
+  .speed-wrap { margin-left:auto; display:flex; align-items:center; gap:6px; font-size:0.65rem; color:var(--dim); }
+  select { background:var(--bg); color:var(--text); border:1px solid var(--border); padding:4px 6px; font-family:'DM Mono',monospace; font-size:0.7rem; }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    flex-shrink:0;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+    width: 0%;
+  }
+
+  .current-trip {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    min-height: 64px;
+  }
+  .trip-label { font-size:0.55rem; color:var(--dim); text-transform:uppercase; letter-spacing:2px; margin-bottom:4px; }
+  .trip-date { font-size:0.7rem; color:var(--accent); margin-bottom:2px; }
+  .trip-dest { font-size:0.95rem; color:var(--text); font-weight:500; }
+  .trip-km { font-size:0.7rem; color:var(--dim); margin-top:2px; }
+
+  .section-head {
+    padding: 10px 16px 6px;
+    font-size:0.6rem;
+    color:var(--dim);
+    text-transform:uppercase;
+    letter-spacing:2px;
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+
+  .name-table {
+    flex:1;
+    overflow-y:auto;
+    padding: 8px 0;
+  }
+  .name-table::-webkit-scrollbar { width:3px; }
+  .name-table::-webkit-scrollbar-thumb { background:var(--border); }
+
+  .name-row {
+    display:flex;
+    align-items:center;
+    padding: 5px 16px;
+    gap:10px;
+    transition: background 0.2s;
+  }
+  .name-row:hover { background:rgba(255,255,255,0.03); }
+  .name-rank { font-size:0.6rem; color:var(--dim); width:18px; text-align:right; }
+  .name-bar-wrap { flex:1; height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .name-bar { height:100%; background:var(--accent2); border-radius:2px; transition:width 0.5s; }
+  .name-label { font-size:0.75rem; color:var(--text); width:90px; }
+  .name-count { font-size:0.7rem; color:var(--dim); width:24px; text-align:right; }
+
+  .log {
+    border-top:1px solid var(--border);
+    flex-shrink:0;
+    max-height:130px;
+    overflow-y:auto;
+    padding:6px 0;
+  }
+  .log::-webkit-scrollbar { width:3px; }
+  .log::-webkit-scrollbar-thumb { background:var(--border); }
+  .log-entry {
+    padding: 3px 16px;
+    font-size:0.65rem;
+    color:var(--dim);
+    display:flex;
+    gap:8px;
+  }
+  .log-entry.active { color:var(--text); }
+  .log-entry .log-date { color:var(--accent); flex-shrink:0; }
+  .log-entry .log-dest { color:var(--text); }
+
+  /* Leaflet overrides */
+  .leaflet-container { background:#0d1018 !important; }
+  .leaflet-tile { filter:brightness(0.35) saturate(0.4) hue-rotate(200deg); }
+
+  .dot-pulse {
+    width:10px; height:10px;
+    border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 0 0 0 rgba(232,255,58,0.7);
+    animation:pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0% { box-shadow:0 0 0 0 rgba(232,255,58,0.6); }
+    70% { box-shadow:0 0 0 10px rgba(232,255,58,0); }
+    100% { box-shadow:0 0 0 0 rgba(232,255,58,0); }
+  }
+  .origin-dot {
+    width:12px; height:12px;
+    border-radius:50%;
+    background:var(--accent2);
+    border:2px solid var(--bg);
+    box-shadow:0 0 8px var(--accent2);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>NRW Prüffahrten 2026</h1>
+    <div class="subtitle">Chronologische Routenvisualisierung</div>
+  </div>
+  <div class="km-display">
+    <div class="km-label">Gesamtkilometer</div>
+    <div class="km-value" id="kmCounter">0</div>
+    <div class="km-unit">km</div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="map"></div>
+  <div class="sidebar">
+    <div class="controls">
+      <button class="btn" id="playBtn" onclick="togglePlay()">▶ Start</button>
+      <button class="btn secondary" onclick="resetAll()">↺ Reset</button>
+      <div class="speed-wrap">
+        Tempo
+        <select id="speedSel">
+          <option value="1200">Langsam</option>
+          <option value="700" selected>Normal</option>
+          <option value="350">Schnell</option>
+        </select>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+
+    <div class="current-trip" id="currentTrip">
+      <div class="trip-label">Aktuelle Fahrt</div>
+      <div class="trip-date" id="tripDate">–</div>
+      <div class="trip-dest" id="tripDest">Warten auf Start…</div>
+      <div class="trip-km" id="tripKm"></div>
+    </div>
+
+    <div class="section-head">Top Prüfpartner</div>
+    <div class="name-table" id="nameTable"></div>
+
+    <div class="section-head" style="border-top:1px solid var(--border)">Fahrtprotokoll</div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+const DUSSELDORF = [51.2217, 6.7762];
+
+const trips = [
+  { date:"05.01.2026", dest:"Oberhausen / Gelsenkirchen", km:133, total:133,   coords:[51.4956, 6.8625], partners:["Deux"] },
+  { date:"06.01.2026", dest:"Köln / Hürth",              km:103, total:236,   coords:[50.9333, 6.8667], partners:["Exner"] },
+  { date:"07.01.2026", dest:"Witten",                    km:117, total:353,   coords:[51.4443, 7.3529], partners:["Exner"] },
+  { date:"13.01.2026", dest:"Geldern",                   km:136, total:489,   coords:[51.5186, 6.3253], partners:["Nowicki"] },
+  { date:"14.01.2026", dest:"Neuss",                     km:26,  total:515,   coords:[51.1985, 6.6942], partners:["Preuß"] },
+  { date:"15.01.2026", dest:"Detmold",                   km:402, total:917,   coords:[51.9375, 8.8797], partners:["Nowicki"] },
+  { date:"19.01.2026", dest:"Bonn",                      km:149, total:1066,  coords:[50.7374, 7.0982], partners:["Nowicki"] },
+  { date:"21.01.2026", dest:"Essen",                     km:69,  total:1135,  coords:[51.4556, 7.0116], partners:["Preuß"] },
+  { date:"27.01.2026", dest:"Düren",                     km:160, total:1295,  coords:[50.8037, 6.4847], partners:["Islami"] },
+  { date:"28.01.2026", dest:"Köln",                      km:95,  total:1390,  coords:[50.9333, 6.9600], partners:["Exner"] },
+  { date:"29.01.2026", dest:"Münster",                   km:250, total:1640,  coords:[51.9607, 7.6261], partners:["Graf"] },
+  { date:"02.02.2026", dest:"Köln",                      km:104, total:1744,  coords:[50.9380, 6.9600], partners:["Bings"] },
+  { date:"10.02.2026", dest:"Duisburg",                  km:71,  total:1815,  coords:[51.4349, 6.7623], partners:["Schmiegelt"] },
+  { date:"11.02.2026", dest:"Hamm",                      km:224, total:2039,  coords:[51.6804, 7.8168], partners:["Graf","Nowicki","Bings"] },
+  { date:"16.02.2026", dest:"Soest",                     km:227, total:2266,  coords:[51.5711, 8.1089], partners:["Aksoy"] },
+  { date:"17.02.2026", dest:"Verl",                      km:344, total:2610,  coords:[51.8836, 8.5157], partners:["Islami"] },
+  { date:"23.02.2026", dest:"Mönchengladbach",           km:84,  total:2694,  coords:[51.1805, 6.4428], partners:["Weber"] },
+  { date:"24.02.2026", dest:"Moers",                     km:90,  total:2784,  coords:[51.4530, 6.6263], partners:["Schmiegelt"] },
+  { date:"26.02.2026", dest:"Monheim / Erkrath",         km:59,  total:2843,  coords:[51.0987, 6.9032], partners:["Nowicki"] },
+  { date:"05.03.2026", dest:"Lippstadt",                 km:277, total:3120,  coords:[51.6740, 8.3450], partners:["Schäfer"] },
+  { date:"09.03.2026", dest:"Wuppertal",                 km:67,  total:3187,  coords:[51.2562, 7.1508], partners:["Preuß","Exner","Maas"] },
+  { date:"11.03.2026", dest:"Bergisch Gladbach",         km:111, total:3298,  coords:[50.9833, 7.1333], partners:["Islami"] },
+  { date:"12.03.2026", dest:"Dorsten",                   km:122, total:3420,  coords:[51.6603, 6.9655], partners:["Preuß"] },
+  { date:"16.03.2026", dest:"Gladbeck",                  km:102, total:3522,  coords:[51.5714, 6.9881], partners:["Schmiegelt"] },
+  { date:"17.03.2026", dest:"Blomberg",                  km:415, total:3937,  coords:[51.9424, 9.0849], partners:["Weber"] },
+  { date:"19.03.2026", dest:"Wuppertal",                 km:74,  total:4011,  coords:[51.2562, 7.1508], partners:["Nowicki"] },
+  { date:"23.03.2026", dest:"Kaarst / Grevenbroich",    km:63,  total:4074,  coords:[51.2219, 6.6158], partners:["Bings"] },
+  { date:"26.03.2026", dest:"Bielefeld",                 km:0,   total:4074,  coords:[52.0302, 8.5325], partners:["Wagner","Nowicki"] },
+];
+
+let map, currentStep = -1, playing = false, timer = null;
+let lines = [], markers = [];
+let nameCounts = {};
+
+function initMap() {
+  map = L.map('map', { zoomControl:false, attributionControl:false }).setView([51.4, 7.2], 8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:13 }).addTo(map);
+
+  // Düsseldorf marker (origin)
+  const originIcon = L.divIcon({ className:'', html:'<div class="origin-dot"></div>', iconSize:[12,12], iconAnchor:[6,6] });
+  L.marker(DUSSELDORF, { icon:originIcon }).addTo(map).bindTooltip('Düsseldorf (Basis)', { permanent:false });
+}
+
+function togglePlay() {
+  playing = !playing;
+  document.getElementById('playBtn').textContent = playing ? '⏸ Pause' : '▶ Weiter';
+  if (playing) step();
+}
+
+function step() {
+  if (!playing) return;
+  currentStep++;
+  if (currentStep >= trips.length) {
+    playing = false;
+    document.getElementById('playBtn').textContent = '✓ Fertig';
+    return;
+  }
+  showTrip(currentStep);
+  const speed = parseInt(document.getElementById('speedSel').value);
+  timer = setTimeout(step, speed);
+}
+
+function showTrip(i) {
+  const t = trips[i];
+
+  // Progress
+  document.getElementById('progressFill').style.width = ((i+1)/trips.length*100) + '%';
+
+  // Animate km
+  animateKm(i > 0 ? trips[i-1].total : 0, t.total);
+
+  // Draw line
+  const line = L.polyline([DUSSELDORF, t.coords], {
+    color: `hsl(${60 + i*8}, 90%, 55%)`,
+    weight: 2.5,
+    opacity: 0.75,
+    dashArray: '6,4'
+  }).addTo(map);
+  lines.push(line);
+
+  // Destination marker
+  const destIcon = L.divIcon({ className:'', html:'<div class="dot-pulse"></div>', iconSize:[10,10], iconAnchor:[5,5] });
+  const m = L.marker(t.coords, { icon:destIcon }).addTo(map)
+    .bindTooltip(`${t.dest}<br>${t.date}<br>+${t.km} km`, { permanent:false });
+  markers.push(m);
+
+  // Current trip panel
+  document.getElementById('tripDate').textContent = t.date;
+  document.getElementById('tripDest').textContent = t.dest;
+  document.getElementById('tripKm').textContent = `+${t.km} km / ${t.partners.join(', ')}`;
+
+  // Update name counts
+  t.partners.forEach(p => {
+    if (p) nameCounts[p] = (nameCounts[p] || 0) + 1;
+  });
+  renderNameTable();
+
+  // Log
+  addLog(t);
+}
+
+let kmAnim = null;
+function animateKm(from, to) {
+  if (kmAnim) clearInterval(kmAnim);
+  const el = document.getElementById('kmCounter');
+  const steps = 30;
+  const diff = to - from;
+  let s = 0;
+  kmAnim = setInterval(() => {
+    s++;
+    el.textContent = Math.round(from + diff * (s/steps)).toLocaleString('de-DE');
+    if (s >= steps) { clearInterval(kmAnim); el.textContent = to.toLocaleString('de-DE'); }
+  }, 18);
+}
+
+function renderNameTable() {
+  const sorted = Object.entries(nameCounts).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const max = sorted[0]?.[1] || 1;
+  const html = sorted.map(([name, count], idx) =>
+    `<div class="name-row">
+      <div class="name-rank">${idx+1}</div>
+      <div class="name-label">${name}</div>
+      <div class="name-bar-wrap"><div class="name-bar" style="width:${count/max*100}%"></div></div>
+      <div class="name-count">${count}</div>
+    </div>`
+  ).join('');
+  document.getElementById('nameTable').innerHTML = html;
+}
+
+function addLog(t) {
+  const log = document.getElementById('log');
+  const entry = document.createElement('div');
+  entry.className = 'log-entry active';
+  entry.innerHTML = `<span class="log-date">${t.date}</span><span class="log-dest">${t.dest}</span><span style="color:var(--dim);margin-left:auto">+${t.km}</span>`;
+  log.prepend(entry);
+  // dim older entries
+  [...log.querySelectorAll('.log-entry.active')].slice(1).forEach(e => e.classList.remove('active'));
+}
+
+function resetAll() {
+  playing = false;
+  if (timer) clearTimeout(timer);
+  document.getElementById('playBtn').textContent = '▶ Start';
+  currentStep = -1;
+  nameCounts = {};
+  lines.forEach(l => map.removeLayer(l));
+  markers.forEach(m => map.removeLayer(m));
+  lines = []; markers = [];
+  document.getElementById('kmCounter').textContent = '0';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('tripDate').textContent = '–';
+  document.getElementById('tripDest').textContent = 'Warten auf Start…';
+  document.getElementById('tripKm').textContent = '';
+  document.getElementById('nameTable').innerHTML = '';
+  document.getElementById('log').innerHTML = '';
+}
+
+initMap();
+</script>
+</body>
+</html>
