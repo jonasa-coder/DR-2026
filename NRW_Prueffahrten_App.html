@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NRW Prüffahrten 2026</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0c10; --panel:#111318; --border:#1e2330;
+  --accent:#e8ff3a; --accent2:#3affb8; --text:#ffffff; --dim:#8a95a8;
+  --red:#ff4455; --input:#181c24;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:"DM Mono",monospace;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── HEADER ── */
+header{padding:10px 20px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;z-index:100;}
+header h1{font-family:"Bebas Neue",sans-serif;font-size:1.8rem;letter-spacing:3px;color:var(--accent);line-height:1;}
+.subtitle{font-size:0.55rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;}
+.header-tabs{display:flex;gap:4px;margin-left:auto;}
+.tab{padding:7px 18px;font-family:"DM Mono",monospace;font-size:0.72rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--dim);transition:all 0.15s;}
+.tab.active{background:var(--accent);color:#000;border-color:var(--accent);}
+.tab:hover:not(.active){color:#fff;border-color:#fff;}
+.btn-present{padding:7px 20px;font-family:"DM Mono",monospace;font-size:0.72rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;background:var(--accent2);color:#000;border:none;font-weight:500;transition:opacity 0.15s;}
+.btn-present:hover{opacity:0.85;}
+
+/* ── VIEWS ── */
+.view{display:none;flex:1;overflow:hidden;}
+.view.active{display:flex;}
+
+/* ══════════════════════════════
+   EDITOR VIEW
+══════════════════════════════ */
+#editorView{flex-direction:column;}
+.editor-toolbar{padding:10px 16px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.ebtn{padding:5px 14px;font-family:"DM Mono",monospace;font-size:0.68rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:transparent;color:#fff;transition:all 0.15s;}
+.ebtn:hover{border-color:var(--accent2);color:var(--accent2);}
+.ebtn.danger:hover{border-color:var(--red);color:var(--red);}
+.ebtn.primary{background:var(--accent2);color:#000;border-color:var(--accent2);}
+.stats-bar{margin-left:auto;font-size:0.62rem;color:var(--dim);}
+.stats-bar span{color:#fff;margin-left:4px;}
+
+.table-wrap{flex:1;overflow:auto;}
+.table-wrap::-webkit-scrollbar{width:6px;height:6px;}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+table{width:100%;border-collapse:collapse;font-size:0.72rem;}
+thead th{position:sticky;top:0;background:#0d1018;padding:8px 10px;text-align:left;font-size:0.58rem;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;border-bottom:1px solid var(--border);white-space:nowrap;z-index:10;}
+tbody tr{border-bottom:1px solid #151920;}
+tbody tr:hover{background:rgba(255,255,255,0.025);}
+tbody tr.selected{background:rgba(58,255,184,0.06);}
+tbody td{padding:6px 10px;vertical-align:middle;}
+tbody td input{background:transparent;border:none;color:#fff;font-family:"DM Mono",monospace;font-size:0.72rem;width:100%;outline:none;padding:2px 4px;}
+tbody td input:focus{background:var(--input);border-radius:2px;}
+tbody td input::placeholder{color:var(--dim);}
+.td-nr{color:var(--dim);font-size:0.62rem;width:36px;text-align:center;}
+.td-del{width:32px;text-align:center;}
+.del-btn{background:none;border:none;color:var(--dim);cursor:pointer;font-size:0.9rem;padding:2px 6px;transition:color 0.15s;}
+.del-btn:hover{color:var(--red);}
+.td-km{width:80px;}
+.td-total{width:90px;color:var(--dim);}
+.td-coords{width:160px;}
+
+/* ══════════════════════════════
+   PRÄSENTATION VIEW
+══════════════════════════════ */
+#presView{position:relative;}
+#map{flex:1;height:100%;}
+
+.pres-sidebar{width:345px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+
+.km-hero{padding:14px 16px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#071a12,#0a1f16);text-align:center;}
+.km-label{font-size:0.5rem;color:var(--dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:2px;}
+.km-value{font-family:"Bebas Neue",sans-serif;font-size:4rem;color:var(--accent2);letter-spacing:4px;line-height:1;text-shadow:0 0 28px rgba(58,255,184,0.7);}
+.km-unit{font-size:0.6rem;color:var(--accent2);opacity:0.6;letter-spacing:2px;}
+
+.pres-controls{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:7px;align-items:center;}
+.pbtn{background:var(--accent);color:#000;border:none;padding:6px 13px;font-family:"DM Mono",monospace;font-weight:500;font-size:0.7rem;letter-spacing:1px;cursor:pointer;text-transform:uppercase;}
+.pbtn:hover{opacity:0.85;}
+.pbtn.sec{background:transparent;color:#fff;border:1px solid var(--border);}
+.pbtn.sec:hover{border-color:var(--accent);color:var(--accent);}
+.speed-wrap{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:0.6rem;color:var(--dim);}
+select{background:var(--bg);color:#fff;border:1px solid var(--border);padding:3px 5px;font-family:"DM Mono",monospace;font-size:0.65rem;}
+
+.progress-bar{height:3px;background:var(--border);flex-shrink:0;}
+.progress-fill{height:100%;background:var(--accent);transition:width 0.3s;width:0%;}
+
+.current-trip{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.trip-label{font-size:0.5rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin-bottom:3px;}
+.trip-date{font-size:0.68rem;color:var(--accent);margin-bottom:1px;}
+.trip-dest{font-size:0.95rem;color:#fff;font-weight:500;}
+.trip-km{font-size:0.65rem;color:var(--dim);margin-top:2px;}
+
+.section-head{padding:7px 14px 5px;font-size:0.56rem;color:var(--dim);text-transform:uppercase;letter-spacing:2px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:6px;}
+.sort-toggle{margin-left:auto;display:flex;gap:4px;}
+.sort-btn{font-size:0.53rem;padding:2px 7px;cursor:pointer;border:1px solid var(--border);color:var(--dim);background:transparent;font-family:"DM Mono",monospace;transition:all 0.15s;}
+.sort-btn.active{border-color:var(--accent2);color:var(--accent2);}
+
+.name-table{overflow-y:auto;padding:4px 0;min-height:0;flex:1;}
+.name-table::-webkit-scrollbar{width:3px;}
+.name-table::-webkit-scrollbar-thumb{background:var(--border);}
+.name-row{display:flex;align-items:center;padding:4px 14px;gap:7px;}
+.name-rank{font-size:0.56rem;color:var(--dim);width:15px;text-align:right;flex-shrink:0;}
+.name-label{font-size:0.72rem;color:#fff;width:78px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:filter 0.3s;}
+.name-label.blurred{filter:blur(5px);user-select:none;}
+.name-bar-wrap{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.name-bar{height:100%;background:var(--accent2);border-radius:2px;transition:width 0.5s;}
+.name-count{font-size:0.65rem;color:#fff;width:58px;text-align:right;flex-shrink:0;white-space:nowrap;}
+
+.log-section{border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;height:200px;}
+.log{overflow-y:auto;flex:1;padding:4px 0;}
+.log::-webkit-scrollbar{width:3px;}
+.log::-webkit-scrollbar-thumb{background:var(--border);}
+.log-entry{padding:3px 14px;font-size:0.63rem;color:var(--dim);display:flex;gap:7px;align-items:baseline;}
+.log-entry.now{color:#fff;}
+.log-date{color:var(--accent);flex-shrink:0;font-size:0.58rem;}
+.log-dest{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.log-km{color:var(--accent2);flex-shrink:0;}
+
+.leaflet-container{background:#0d1018!important;}
+
+/* ══ STATS VIEW ══ */
+#statsView{flex-direction:column;background:var(--bg);}
+.stats-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;overflow-x:auto;}
+.stats-tab{padding:10px 18px;font-family:"DM Mono",monospace;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--dim);white-space:nowrap;transition:all 0.15s;}
+.stats-tab:hover{color:#fff;}
+.stats-tab.active{color:var(--accent2);border-bottom-color:var(--accent2);}
+.stats-content{flex:1;overflow-y:auto;padding:24px;display:none;}
+.stats-content.active{display:block;}
+.stats-content::-webkit-scrollbar{width:6px;}
+.stats-content::-webkit-scrollbar-thumb{background:var(--border);}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:20px;margin-bottom:20px;}
+.stat-card h3{font-family:"Bebas Neue",sans-serif;font-size:1.2rem;letter-spacing:2px;color:var(--accent);margin-bottom:16px;}
+.chart-wrap{position:relative;width:100%;height:280px;}
+/* Calendar */
+.cal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
+.cal-month{background:#0d1018;border:1px solid var(--border);border-radius:3px;padding:10px;}
+.cal-month-name{font-size:0.6rem;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}
+.cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-day{width:100%;aspect-ratio:1;border-radius:2px;background:#151920;font-size:0;position:relative;}
+.cal-day.trip{cursor:pointer;}
+.cal-day-label{font-size:0.42rem;color:var(--dim);text-align:center;padding:1px 0;}
+/* Orte heatmap */
+.ort-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #151920;}
+.ort-rank{font-size:0.6rem;color:var(--dim);width:20px;text-align:right;flex-shrink:0;}
+.ort-name{font-size:0.75rem;color:#fff;width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ort-bar-wrap{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.ort-bar{height:100%;border-radius:3px;transition:width 0.8s;}
+.ort-count{font-size:0.68rem;color:#fff;width:30px;text-align:right;flex-shrink:0;}
+.ort-km{font-size:0.62rem;color:var(--dim);width:70px;text-align:right;flex-shrink:0;}
+/* Partner ranking */
+.partner-reveal-btn{padding:5px 14px;font-family:"DM Mono",monospace;font-size:0.65rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--dim);transition:all 0.15s;margin-bottom:12px;}
+.partner-reveal-btn.active{border-color:var(--accent2);color:var(--accent2);}
+.partner-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #151920;}
+.partner-rank{font-size:0.6rem;color:var(--dim);width:20px;text-align:right;flex-shrink:0;}
+.partner-name{font-size:0.75rem;color:#fff;width:100px;flex-shrink:0;transition:filter 0.3s;}
+.partner-name.blurred{filter:blur(5px);}
+.partner-bar-wrap{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden;}
+.partner-bar{height:100%;background:var(--accent2);border-radius:3px;}
+.partner-val{font-size:0.68rem;color:#fff;width:90px;text-align:right;flex-shrink:0;}
+.sort-pills{display:flex;gap:6px;margin-bottom:14px;}
+.sort-pill{padding:4px 12px;font-family:"DM Mono",monospace;font-size:0.62rem;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--dim);border-radius:20px;transition:all 0.15s;}
+.sort-pill.active{border-color:var(--accent2);color:var(--accent2);background:rgba(58,255,184,0.08);}
+
+.leaflet-tile{filter:brightness(0.45) saturate(0.5) hue-rotate(190deg);}
+
+/* Zoom controls */
+.leaflet-control-zoom { border:none!important; margin:14px!important; }
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+  background:var(--panel)!important;
+  color:var(--accent)!important;
+  border:1px solid var(--border)!important;
+  font-family:"DM Mono",monospace!important;
+  font-size:1.1rem!important;
+  width:32px!important;
+  height:32px!important;
+  line-height:30px!important;
+  display:block!important;
+}
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+  background:var(--accent)!important;
+  color:#000!important;
+}
+
+
+.collapse-btn{
+  flex-shrink:0;
+  z-index:1000;background:var(--panel);border:1px solid var(--border);
+  border-right:none;
+  color:var(--accent);width:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.65rem;transition:background 0.15s;
+  writing-mode:vertical-rl;
+  align-self:stretch;
+}
+.collapse-btn:hover{background:var(--accent);color:#000;}
+.pres-sidebar{transition:width 0.3s;overflow:hidden;}
+.pres-sidebar.collapsed{width:0 !important;border:none;}
+#presView{position:relative;}
+#presView .map-wrap{flex:1;position:relative;}
+
+@keyframes pulse{
+  0%{box-shadow:0 0 0 0 rgba(255,200,0,0.8);}
+  70%{box-shadow:0 0 0 12px rgba(255,200,0,0);}
+  100%{box-shadow:0 0 0 0 rgba(255,200,0,0);}
+}
+
+/* modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border);padding:24px;width:420px;max-width:95vw;}
+.modal h2{font-family:"Bebas Neue",sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:16px;}
+.modal label{display:block;font-size:0.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;margin-top:12px;}
+.modal input{width:100%;background:var(--input);border:1px solid var(--border);color:#fff;padding:7px 10px;font-family:"DM Mono",monospace;font-size:0.8rem;outline:none;}
+.modal input:focus{border-color:var(--accent2);}
+.modal-hint{font-size:0.58rem;color:var(--dim);margin-top:4px;}
+.modal-btns{display:flex;gap:8px;margin-top:20px;justify-content:flex-end;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>NRW Prüffahrten</h1>
+    <div class="subtitle">Dienstreisen · Verwaltung & Präsentation</div>
+  </div>
+  <div class="header-tabs">
+    <button class="tab active" onclick="switchTab('editor')">✏ Editor</button>
+    <button class="tab" onclick="switchTab('pres')">▶ Präsentation</button>
+    <button class="tab" onclick="switchTab('stats')">📊 Auswertung</button>
+  </div>
+</header>
+
+<!-- ══ EDITOR ══ -->
+<div id="editorView" class="view active">
+  <div class="editor-toolbar">
+    <button class="ebtn primary" onclick="addRow()">+ Fahrt hinzufügen</button>
+    <button class="ebtn" onclick="openImport()">↑ Excel / CSV Import</button>
+    <button class="ebtn" onclick="exportCSV()">↓ CSV Export</button>
+    <button class="ebtn danger" onclick="clearAll()">✕ Alle löschen</button>
+    <div class="stats-bar">Fahrten: <span id="statFahrten">0</span> · Gesamt: <span id="statKm">0</span> km</div>
+  </div>
+  <div class="table-wrap">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th class="td-nr">#</th>
+          <th style="min-width:90px">Datum</th>
+          <th style="min-width:180px">Prüfort</th>
+          <th class="td-km">km / Tag</th>
+          <th class="td-total">Gesamt km</th>
+          <th style="min-width:110px">Prüfer 1</th>
+          <th style="min-width:110px">Prüfer 2</th>
+          <th style="min-width:110px">Prüfer 3</th>
+          <th style="min-width:160px">Koordinaten (lat,lng)</th>
+          <th class="td-del"></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ PRÄSENTATION ══ -->
+<div id="presView" class="view">
+  <div class="map-wrap"><div id="map"></div></div>
+  <button class="collapse-btn" id="collapseBtn" onclick="toggleSidebar()">◀</button>
+  <div class="pres-sidebar" id="presSidebar">
+    <div class="km-hero">
+      <div class="km-label">Gesamtkilometer</div>
+      <div class="km-value" id="kmCounter">0</div>
+      <div class="km-unit">KM</div>
+    </div>
+    <div class="pres-controls">
+      <button class="pbtn" id="playBtn" onclick="togglePlay()">▶ Start</button>
+      <button class="pbtn sec" onclick="resetPres()">↺ Reset</button>
+      <div class="speed-wrap">
+        Tempo
+        <select id="speedSel">
+          <option value="1400">Langsam</option>
+          <option value="750" selected>Normal</option>
+          <option value="350">Schnell</option>
+        </select>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="current-trip">
+      <div class="trip-label">Aktuelle Fahrt</div>
+      <div class="trip-date" id="tripDate">–</div>
+      <div class="trip-dest" id="tripDest">Bereit zum Starten…</div>
+      <div class="trip-km" id="tripKm"></div>
+    </div>
+    <div class="section-head">
+      Top Prüfpartner
+      <div class="sort-toggle">
+<button class="sort-btn active" id="sortE" onclick="setSort('e')">Einsätze</button>
+        <button class="sort-btn" id="sortK" onclick="setSort('k')">Kilometer</button>
+      </div>
+    </div>
+    <div class="name-table" id="nameTable"></div>
+    <div class="log-section">
+      <div class="section-head">Fahrtprotokoll</div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: Coords auflösen ══ -->
+<div class="modal-bg" id="coordModal">
+  <div class="modal">
+    <h2>Koordinaten suchen</h2>
+    <label>Ortsname</label>
+    <input type="text" id="coordSearch" placeholder="z.B. Witten, NRW" onkeydown="if(event.key==='Enter')resolveCoords()"/>
+    <div class="modal-hint">Tipp: Füge ", NRW" oder ", Deutschland" hinzu für bessere Treffer.</div>
+    <label>Ergebnis (lat, lng)</label>
+    <input type="text" id="coordResult" placeholder="wird hier angezeigt…" readonly/>
+    <div class="modal-btns">
+      <button class="ebtn" onclick="closeCoordModal()">Abbrechen</button>
+      <button class="ebtn" onclick="resolveCoords()">Suchen</button>
+      <button class="ebtn primary" id="coordApply" onclick="applyCoords()" style="display:none">Übernehmen</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══ AUSWERTUNG ══ -->
+<div id="statsView" class="view">
+  <div class="stats-tabs">
+    <button class="stats-tab active" onclick="showStatsTab('verlauf')">📈 Verlauf</button>
+    <button class="stats-tab" onclick="showStatsTab('kalender')">📅 Kalender</button>
+    <button class="stats-tab" onclick="showStatsTab('monat')">📊 Monate</button>
+    <button class="stats-tab" onclick="showStatsTab('wochentag')">📆 Wochentage</button>
+    <button class="stats-tab" onclick="showStatsTab('orte')">📍 Orte</button>
+    <button class="stats-tab" onclick="showStatsTab('partner')">👥 Prüfpartner</button>
+  </div>
+
+  <!-- Verlauf -->
+  <div class="stats-content active" id="sc-verlauf">
+    <div class="stat-card">
+      <h3>Kumulierte Kilometer im Jahresverlauf</h3>
+      <div class="chart-wrap"><canvas id="chartVerlauf"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Kalender -->
+  <div class="stats-content" id="sc-kalender">
+    <div class="stat-card">
+      <h3>Jahreskalender Nov 2025 – Okt 2026</h3>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+  </div>
+
+  <!-- Monate -->
+  <div class="stats-content" id="sc-monat">
+    <div class="stat-card">
+      <h3>Kilometer & Fahrten pro Monat</h3>
+      <div class="chart-wrap"><canvas id="chartMonat"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Wochentage -->
+  <div class="stats-content" id="sc-wochentag">
+    <div class="stat-card">
+      <h3>Fahrten nach Wochentag (Mo – Do)</h3>
+      <div class="chart-wrap" style="height:220px"><canvas id="chartWochentag"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Orte -->
+  <div class="stats-content" id="sc-orte">
+    <div class="stat-card">
+      <h3>Meistbesuchte Prüforte – Top 10</h3>
+      <div id="orteList"></div>
+    </div>
+  </div>
+
+  <!-- Partner -->
+  <div class="stats-content" id="sc-partner">
+    <div class="stat-card">
+      <h3>Prüfpartner-Ranking</h3>
+      <div class="sort-pills">
+        <button class="sort-pill active" id="pSortKm" onclick="setPartnerSort('km')">Kilometer</button>
+        <button class="sort-pill" id="pSortE" onclick="setPartnerSort('e')">Einsätze</button>
+        <button class="partner-reveal-btn" id="partnerRevealBtn" onclick="togglePartnerReveal()">👁 Namen anzeigen</button>
+      </div>
+      <div id="partnerList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DÜSSELDORF = [51.2217, 6.7762];
+const STORAGE_KEY = 'nrw_fahrten_2026';
+
+
+// ── Default data ──
+const DEFAULT_TRIPS = [
+  {date:"05.01.2026",dest:"Oberhausen / Gelsenkirchen",km:133,p1:"Deux",p2:"",p3:"",coords:"51.4956,6.8625"},
+  {date:"06.01.2026",dest:"Köln / Hürth",km:103,p1:"Exner",p2:"",p3:"",coords:"50.9333,6.8667"},
+  {date:"07.01.2026",dest:"Witten",km:117,p1:"Exner",p2:"",p3:"",coords:"51.4443,7.3529"},
+  {date:"13.01.2026",dest:"Geldern",km:136,p1:"Nowicki",p2:"",p3:"",coords:"51.5186,6.3253"},
+  {date:"14.01.2026",dest:"Neuss",km:26,p1:"Preuß",p2:"",p3:"",coords:"51.1985,6.6942"},
+  {date:"15.01.2026",dest:"Detmold",km:402,p1:"Nowicki",p2:"",p3:"",coords:"51.9375,8.8797"},
+  {date:"19.01.2026",dest:"Bonn",km:149,p1:"Nowicki",p2:"",p3:"",coords:"50.7374,7.0982"},
+  {date:"21.01.2026",dest:"Essen",km:69,p1:"Preuß",p2:"",p3:"",coords:"51.4556,7.0116"},
+  {date:"27.01.2026",dest:"Düren",km:160,p1:"Islami",p2:"",p3:"",coords:"50.8037,6.4847"},
+  {date:"28.01.2026",dest:"Köln",km:95,p1:"Exner",p2:"",p3:"",coords:"50.9333,6.9600"},
+  {date:"29.01.2026",dest:"Münster",km:250,p1:"Graf",p2:"",p3:"",coords:"51.9607,7.6261"},
+  {date:"02.02.2026",dest:"Köln",km:104,p1:"Bings",p2:"",p3:"",coords:"50.9380,6.9650"},
+  {date:"10.02.2026",dest:"Duisburg",km:71,p1:"Schmiegelt",p2:"",p3:"",coords:"51.4349,6.7623"},
+  {date:"11.02.2026",dest:"Hamm",km:224,p1:"Graf",p2:"Nowicki",p3:"Bings",coords:"51.6804,7.8168"},
+  {date:"16.02.2026",dest:"Soest",km:227,p1:"Aksoy",p2:"",p3:"",coords:"51.5711,8.1089"},
+  {date:"17.02.2026",dest:"Verl",km:344,p1:"Islami",p2:"",p3:"",coords:"51.8836,8.5157"},
+  {date:"23.02.2026",dest:"Mönchengladbach",km:84,p1:"Weber",p2:"",p3:"",coords:"51.1805,6.4428"},
+  {date:"24.02.2026",dest:"Moers",km:90,p1:"Schmiegelt",p2:"",p3:"",coords:"51.4530,6.6263"},
+  {date:"26.02.2026",dest:"Monheim / Erkrath",km:59,p1:"Nowicki",p2:"",p3:"",coords:"51.0987,6.9032"},
+  {date:"05.03.2026",dest:"Lippstadt",km:277,p1:"Schäfer",p2:"",p3:"",coords:"51.6740,8.3450"},
+  {date:"09.03.2026",dest:"Wuppertal",km:67,p1:"Preuß",p2:"Exner",p3:"Maas",coords:"51.2562,7.1508"},
+  {date:"11.03.2026",dest:"Bergisch Gladbach",km:111,p1:"Islami",p2:"",p3:"",coords:"50.9833,7.1333"},
+  {date:"12.03.2026",dest:"Dorsten",km:122,p1:"Preuß",p2:"",p3:"",coords:"51.6603,6.9655"},
+  {date:"16.03.2026",dest:"Gladbeck",km:102,p1:"Schmiegelt",p2:"",p3:"",coords:"51.5714,6.9881"},
+  {date:"17.03.2026",dest:"Blomberg",km:415,p1:"Weber",p2:"",p3:"",coords:"51.9424,9.0849"},
+  {date:"19.03.2026",dest:"Wuppertal",km:74,p1:"Nowicki",p2:"",p3:"",coords:"51.2580,7.1520"},
+  {date:"23.03.2026",dest:"Kaarst / Grevenbroich",km:63,p1:"Bings",p2:"",p3:"",coords:"51.2219,6.6158"},
+  {date:"26.03.2026",dest:"Bielefeld",km:364,p1:"Wagner",p2:"Nowicki",p3:"",coords:"52.0302,8.5325"},
+  {date:"30.03.2026",dest:"Gummersbach",km:168,p1:"Aksoy",p2:"",p3:"",coords:"51.0258,7.5652"},
+  {date:"31.03.2026",dest:"Detmold",km:386,p1:"Weber",p2:"",p3:"",coords:"51.9375,8.8820"},
+  {date:"07.04.2026",dest:"Witten",km:121,p1:"Kieslich",p2:"",p3:"",coords:"51.4460,7.3540"},
+  {date:"13.04.2026",dest:"Monheim",km:44,p1:"Kieslich",p2:"",p3:"",coords:"51.0990,6.9020"},
+  {date:"15.04.2026",dest:"Gelsenkirchen",km:113,p1:"Exner",p2:"",p3:"",coords:"51.5177,7.0857"},
+  {date:"28.04.2026",dest:"Gladbeck",km:113,p1:"Schäfer",p2:"",p3:"",coords:"51.5730,6.9900"},
+  {date:"04.05.2026",dest:"Espelkamp",km:467,p1:"Schmiegelt",p2:"",p3:"",coords:"52.3769,8.6239"},
+  {date:"05.05.2026",dest:"Kerpen",km:120,p1:"Madla",p2:"",p3:"",coords:"50.8710,6.6960"},
+  {date:"11.05.2026",dest:"Remscheid",km:88,p1:"Bings",p2:"",p3:"",coords:"51.1792,7.1894"},
+  {date:"13.05.2026",dest:"Duisburg",km:79,p1:"Schulz",p2:"",p3:"",coords:"51.4380,6.7650"},
+  {date:"18.05.2026",dest:"Essen",km:115,p1:"Schmiegelt",p2:"",p3:"",coords:"51.4580,7.0140"},
+];
+
+// ── State ──
+let trips = [];
+let map = null, mapInit = false;
+let pStep=-1, pPlaying=false, pTimer=null;
+let visitCount={}, visitLines={}, visitMarkers={};
+let nameCounts={}, nameKm={};
+let sortMode='e';
+let coordTargetRow = null;
+
+// ── Storage ──
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(trips)); }
+function load(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  trips = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_TRIPS));
+  recalcTotals();
+}
+
+function recalcTotals(){
+  let cum = 0;
+  trips.forEach(t => { cum += Number(t.km)||0; t.total = cum; });
+}
+
+// ── Tab switching ──
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  if(tab==='editor'){
+    document.querySelectorAll('.tab')[0].classList.add('active');
+    document.getElementById('editorView').classList.add('active');
+    renderTable();
+  } else if(tab==='pres'){
+    document.querySelectorAll('.tab')[1].classList.add('active');
+    document.getElementById('presView').classList.add('active');
+    if(!mapInit){ initMap(); mapInit=true; }
+    else { map.invalidateSize(); }
+  } else if(tab==='stats'){
+    document.querySelectorAll('.tab')[2].classList.add('active');
+    document.getElementById('statsView').classList.add('active');
+    // Render AFTER browser has painted the view (so canvas has dimensions)
+    statsInited={};
+    requestAnimationFrame(()=>{
+      const activeStatsTab = document.querySelector('.stats-tab.active');
+      const activeId = activeStatsTab ? activeStatsTab.getAttribute('onclick').match(/'([^']+)'/)[1] : 'verlauf';
+      // Make sure the right content panel is visible
+      document.querySelectorAll('.stats-content').forEach(c=>c.classList.remove('active'));
+      document.getElementById('sc-'+activeId).classList.add('active');
+      renderStats(activeId);
+      statsInited[activeId]=true;
+    });
+  }
+}
+
+// ══════════════════════════════
+//  EDITOR
+// ══════════════════════════════
+function renderTable(){
+  recalcTotals();
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = trips.map((t,i)=>`
+    <tr id="row${i}">
+      <td class="td-nr">${i+1}</td>
+      <td><input value="${t.date||''}" placeholder="TT.MM.JJJJ" onchange="setField(${i},'date',this.value)"/></td>
+      <td><input value="${t.dest||''}" placeholder="Ort / Stadt" onchange="setField(${i},'dest',this.value)"/></td>
+      <td class="td-km"><input type="number" value="${t.km||''}" placeholder="0" onchange="setField(${i},'km',this.value);recalcAndRender()"/></td>
+      <td class="td-total">${(t.total||0).toLocaleString('de-DE')}</td>
+      <td><input value="${t.p1||''}" placeholder="Prüfer" onchange="setField(${i},'p1',this.value)"/></td>
+      <td><input value="${t.p2||''}" placeholder="Prüfer" onchange="setField(${i},'p2',this.value)"/></td>
+      <td><input value="${t.p3||''}" placeholder="Prüfer" onchange="setField(${i},'p3',this.value)"/></td>
+      <td class="td-coords">
+        <input value="${t.coords||''}" placeholder="51.xxxx,7.xxxx" onchange="setField(${i},'coords',this.value)" style="width:calc(100% - 28px)"/>
+        <button class="del-btn" title="Koordinaten suchen" onclick="openCoordModal(${i})">⌖</button>
+      </td>
+      <td class="td-del"><button class="del-btn" onclick="deleteRow(${i})">✕</button></td>
+    </tr>`).join('');
+  document.getElementById('statFahrten').textContent = trips.length;
+  document.getElementById('statKm').textContent = (trips[trips.length-1]?.total||0).toLocaleString('de-DE');
+}
+
+function setField(i, field, val){
+  trips[i][field] = field==='km' ? Number(val)||0 : val;
+  recalcTotals();
+  save();
+  if(field==='km') renderTable();
+}
+function recalcAndRender(){ recalcTotals(); save(); renderTable(); }
+
+function addRow(){
+  const last = trips[trips.length-1];
+  trips.push({date:'',dest:'',km:0,p1:'',p2:'',p3:'',coords:'',total:(last?.total||0)});
+  save(); renderTable();
+  // scroll to bottom
+  const tw = document.querySelector('.table-wrap');
+  setTimeout(()=>{ tw.scrollTop = tw.scrollHeight; },50);
+}
+
+function deleteRow(i){
+  trips.splice(i,1);
+  recalcTotals(); save(); renderTable();
+}
+
+function clearAll(){
+  if(!confirm('Alle Fahrten löschen?')) return;
+  trips=[];
+  save(); renderTable();
+}
+
+function exportCSV(){
+  const header = 'Datum,Prüfort,km,Prüfer1,Prüfer2,Prüfer3,Koordinaten\n';
+  const rows = trips.map(t=>`"${t.date}","${t.dest}",${t.km},"${t.p1}","${t.p2}","${t.p3}","${t.coords}"`).join('\n');
+  const blob = new Blob([header+rows],{type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'NRW_Fahrten_2026.csv';
+  a.click();
+}
+
+function openImport(){
+  const input = document.createElement('input');
+  input.type='file'; input.accept='.xlsx,.xls,.csv';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    const isExcel = file.name.match(/\.xlsx?$/i);
+    const reader = new FileReader();
+
+    if(isExcel){
+      reader.onload = ev => {
+        const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array', cellDates:true});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+        // Find the header row: look for "Datum"
+        let headerRow = -1;
+        for(let i=0;i<raw.length;i++){
+          if(raw[i].some(c=>String(c).trim()==='Datum')){ headerRow=i; break; }
+        }
+        if(headerRow===-1){ alert('Spalte "Datum" nicht gefunden. Bitte prüfen.'); return; }
+
+        const headers = raw[headerRow].map(c=>String(c).trim());
+        const iDatum   = headers.indexOf('Datum');
+        const iPrufort = headers.indexOf('Prüfort');
+        const iKm      = headers.indexOf('Kilometer');
+        const iP1      = headers.findIndex(h=>h==='Prüfpartner'||h==='Prüfer'||h==='Name');
+        const iP2      = headers.findIndex(h=>h==='Prüfpartner 2'||h==='Prüfer 2');
+        const iP3      = headers.findIndex(h=>h==='Prüfpartner 3'||h==='Prüfer 3');
+
+        const newTrips = [];
+        for(let i=headerRow+1;i<raw.length;i++){
+          const row = raw[i];
+          let dateVal = row[iDatum];
+          if(!dateVal) continue;
+
+          // Format date
+          let dateStr = '';
+          if(dateVal instanceof Date){
+            const d=dateVal.getDate().toString().padStart(2,'0');
+            const m=(dateVal.getMonth()+1).toString().padStart(2,'0');
+            const y=dateVal.getFullYear();
+            dateStr=`${d}.${m}.${y}`;
+          } else {
+            dateStr = String(dateVal).trim();
+            // Convert YYYY-MM-DD to DD.MM.YYYY
+            if(dateStr.match(/^\d{4}-\d{2}-\d{2}/)){
+              const [y,m,d]=dateStr.split('T')[0].split('-');
+              dateStr=`${d}.${m}.${y}`;
+            }
+          }
+
+          const dest = String(row[iPrufort]||'').trim();
+          const km   = Number(row[iKm])||0;
+          if(!dest && !km) continue;
+
+          newTrips.push({
+            date: dateStr,
+            dest: dest,
+            km:   km,
+            p1:   iP1>=0?String(row[iP1]||'').trim():'',
+            p2:   iP2>=0?String(row[iP2]||'').trim():'',
+            p3:   iP3>=0?String(row[iP3]||'').trim():'',
+            coords: ''
+          });
+        }
+
+        if(!newTrips.length){ alert('Keine Daten gefunden. Bitte Datei prüfen.'); return; }
+
+        if(trips.length && !confirm(`${newTrips.length} Fahrten importiert. Bestehende Daten ersetzen?`)) return;
+        trips = newTrips;
+        recalcTotals(); save(); renderTable();
+        alert(`✓ ${newTrips.length} Fahrten erfolgreich importiert.`);
+      };
+      reader.readAsArrayBuffer(file);
+
+    } else {
+      // CSV fallback
+      reader.onload = ev => {
+        const lines = ev.target.result.split('\n').slice(1).filter(l=>l.trim());
+        lines.forEach(line=>{
+          const cols = line.match(/(".*?"|[^,]+)(?=,|$)/g)||[];
+          const clean = cols.map(c=>c.replace(/^"|"$/g,'').trim());
+          if(clean[0]) trips.push({date:clean[0],dest:clean[1]||'',km:Number(clean[2])||0,p1:clean[3]||'',p2:clean[4]||'',p3:clean[5]||'',coords:clean[6]||''});
+        });
+        recalcTotals(); save(); renderTable();
+      };
+      reader.readAsText(file,'utf-8');
+    }
+  };
+  input.click();
+}
+
+// ── Coord modal ──
+function openCoordModal(rowIdx){
+  coordTargetRow = rowIdx;
+  const t = trips[rowIdx];
+  document.getElementById('coordSearch').value = t.dest ? t.dest+', NRW' : '';
+  document.getElementById('coordResult').value = t.coords||'';
+  document.getElementById('coordApply').style.display='none';
+  document.getElementById('coordModal').classList.add('open');
+  setTimeout(()=>document.getElementById('coordSearch').focus(),100);
+}
+function closeCoordModal(){ document.getElementById('coordModal').classList.remove('open'); }
+
+async function resolveCoords(){
+  const q = document.getElementById('coordSearch').value.trim();
+  if(!q) return;
+  document.getElementById('coordResult').value = 'Suche…';
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.length){
+      const coord = `${parseFloat(data[0].lat).toFixed(4)},${parseFloat(data[0].lon).toFixed(4)}`;
+      document.getElementById('coordResult').value = coord;
+      document.getElementById('coordApply').style.display='inline-block';
+    } else {
+      document.getElementById('coordResult').value = 'Kein Ergebnis — bitte manuell eingeben';
+    }
+  } catch(e){
+    document.getElementById('coordResult').value = 'Fehler bei der Suche';
+  }
+}
+
+function applyCoords(){
+  const val = document.getElementById('coordResult').value;
+  if(coordTargetRow!==null && val && !val.includes('Fehler') && !val.includes('Kein')){
+    trips[coordTargetRow].coords = val;
+    save(); renderTable();
+  }
+  closeCoordModal();
+}
+
+// ══════════════════════════════
+//  PRÄSENTATION / MAP
+// ══════════════════════════════
+function heatColor(v){
+  if(v===1) return '#7dff7d';
+  if(v===2) return '#ffe500';
+  if(v===3) return '#ff9900';
+  if(v===4) return '#ff4400';
+  return '#ff0033';
+}
+function heatWeight(v){ return Math.min(2+v*1.4,9); }
+function heatSize(v){ return Math.min(9+v*5,32); }
+
+function toggleSidebar(){
+  const sb=document.getElementById('presSidebar');
+  const btn=document.getElementById('collapseBtn');
+  sb.classList.toggle('collapsed');
+  btn.textContent=sb.classList.contains('collapsed')?'◀':'▶';
+  setTimeout(()=>{ if(map) map.invalidateSize(); },320);
+}
+
+function initMap(){
+  map = L.map('map',{zoomControl:false,attributionControl:false,scrollWheelZoom:false}).setView([51.45,7.5],8);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:14}).addTo(map);
+  L.control.zoom({position:'topleft'}).addTo(map);
+  addDüsseldorfMarker();
+  loadNRWBorder();
+}
+
+function addDüsseldorfMarker(){
+  const el=document.createElement('div');
+  el.style.cssText='width:14px;height:14px;border-radius:50%;background:#3affb8;border:2px solid #06080c;box-shadow:0 0 12px #3affb8,0 0 24px rgba(58,255,184,0.5);';
+  L.marker(DÜSSELDORF,{icon:L.divIcon({className:'',html:el.outerHTML,iconSize:[14,14],iconAnchor:[7,7]})})
+    .addTo(map).bindTooltip('Düsseldorf (Basis)');
+}
+
+const NRW_URLS = [
+  'https://raw.githubusercontent.com/isellsoap/deutschlandGeoJSON/main/2_bundeslaender/4_niedrig.geo.json',
+  'https://raw.githubusercontent.com/blackmad/neighborhoods/master/nordrhein-westfalen.geojson'
+];
+const WORLD_BOX = [[35,-10],[35,30],[72,30],[72,-10],[35,-10]];
+
+async function loadNRWBorder(){
+  // Source 1: all German states — filter for NRW (code 05)
+  try {
+    const res = await fetch(NRW_URLS[0]);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const nrwFeatures = data.features.filter(f=>
+      f.properties.SN_L==='05' ||
+      (f.properties.NAME_1||'').includes('Nordrhein') ||
+      (f.properties.name||'').includes('Nordrhein')
+    );
+    if(nrwFeatures.length){
+      applyNRWMask({type:'FeatureCollection',features:nrwFeatures});
+      return;
+    }
+  } catch(e){ console.warn('NRW source 1 failed:',e); }
+
+  // Source 2: NRW-only file
+  try {
+    const res = await fetch(NRW_URLS[1]);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    applyNRWMask(data);
+  } catch(e){ console.warn('NRW source 2 failed:',e); }
+}
+
+function applyNRWMask(geojson){
+  // Build inverse mask: world box with NRW shape as hole
+  const rings = [];
+  geojson.features.forEach(f=>{
+    const g = f.geometry;
+    const addRing = coords => rings.push(coords[0].map(c=>[c[1],c[0]]));
+    if(g.type==='Polygon') addRing(g.coordinates);
+    else if(g.type==='MultiPolygon') g.coordinates.forEach(p=>addRing(p));
+  });
+
+  // Dark overlay outside NRW
+  L.polygon([WORLD_BOX,...rings],{
+    color:'transparent',weight:0,
+    fillColor:'#000',fillOpacity:0.82,
+    interactive:false,
+  }).addTo(map);
+
+  // Clean white dashed border
+  L.geoJSON(geojson,{
+    style:{color:'rgba(255,255,255,0.75)',weight:1.5,fill:false,dashArray:'4,3'},
+    interactive:false,
+  }).addTo(map);
+}
+
+function addMapOverlay(){ addDüsseldorfMarker(); loadNRWBorder(); }
+
+function togglePlay(){
+  pPlaying=!pPlaying;
+  document.getElementById('playBtn').textContent=pPlaying?'⏸ Pause':'▶ Weiter';
+  if(pPlaying) advance();
+}
+
+function advance(){
+  if(!pPlaying) return;
+  pStep++;
+  const valid = trips.filter(t=>t.coords&&t.dest);
+  if(pStep>=valid.length){
+    pPlaying=false;
+    document.getElementById('playBtn').textContent='✓ Fertig';
+    return;
+  }
+  showTrip(valid[pStep], pStep, valid.length);
+  const speed=parseInt(document.getElementById('speedSel').value);
+  pTimer=setTimeout(advance,speed);
+}
+
+function showTrip(t, idx, total){
+  const coords = t.coords.split(',').map(Number);
+  if(coords.length!==2||isNaN(coords[0])) return;
+
+  const key=t.dest;
+  visitCount[key]=(visitCount[key]||0)+1;
+  const v=visitCount[key];
+  const col=heatColor(v);
+  const sz=heatSize(v);
+
+  if(visitLines[key])   map.removeLayer(visitLines[key]);
+  if(visitMarkers[key]) map.removeLayer(visitMarkers[key]);
+
+  const isDüsseldorf = t.dest.toLowerCase().includes('düsseldorf');
+  const markerCoords = isDüsseldorf ? DÜSSELDORF : coords;
+  // Düsseldorf: slightly bigger start size, otherwise same heatmap
+  const baseSz = isDüsseldorf ? sz+4 : sz;
+  const half=Math.round(baseSz/2);
+
+  if(!isDüsseldorf){
+    visitLines[key]=L.polyline([DÜSSELDORF,coords],{
+      color:col,weight:heatWeight(v),opacity:0.82,dashArray:v>1?'':' 6,4'
+    }).addTo(map);
+  }
+
+  const glow=v>=2?`animation:pulse 1.2s infinite;box-shadow:0 0 ${8+v*7}px ${col},0 0 ${14+v*5}px ${col}60;`:`box-shadow:0 0 8px ${col}80;`;
+  visitMarkers[key]=L.marker(markerCoords,{
+    icon:L.divIcon({className:'',html:`<div style="width:${baseSz}px;height:${baseSz}px;border-radius:50%;background:${col};border:2px solid #06080c;${glow}"></div>`,iconSize:[baseSz,baseSz],iconAnchor:[half,half]})
+  }).addTo(map).bindTooltip(`<b>${t.dest}</b><br>${v}× besucht`);
+
+  document.getElementById('progressFill').style.width=((idx+1)/total*100)+'%';
+  animateKm(idx>0?(trips.filter(x=>x.coords&&x.dest)[idx-1]?.total||0):0, t.total||0);
+
+  document.getElementById('tripDate').textContent=t.date||'–';
+  document.getElementById('tripDest').textContent=t.dest;
+  const ps=[t.p1,t.p2,t.p3].filter(Boolean);
+  document.getElementById('tripKm').textContent=`+${t.km} km${ps.length?' · '+ps.join(', '):''}`;
+
+  ps.forEach(p=>{ nameCounts[p]=(nameCounts[p]||0)+1; nameKm[p]=(nameKm[p]||0)+(Number(t.km)||0); });
+  renderNames();
+  addLog(t);
+}
+
+let kmCurrent=0, kmTarget=0, kmRaf=null;
+function kmTick(){
+  if(kmCurrent<kmTarget){
+    kmCurrent=Math.min(kmCurrent+Math.max(1,Math.ceil((kmTarget-kmCurrent)*0.04)),kmTarget);
+    document.getElementById('kmCounter').textContent=Math.round(kmCurrent).toLocaleString('de-DE');
+    kmRaf=requestAnimationFrame(kmTick);
+  }
+}
+function animateKm(from,to){
+  kmTarget=to;
+  if(!kmRaf||kmCurrent>=kmTarget-1){ kmCurrent=from; }
+  if(kmRaf) cancelAnimationFrame(kmRaf);
+  kmRaf=requestAnimationFrame(kmTick);
+}
+
+function setSort(m){
+  sortMode=m;
+  document.getElementById('sortE').classList.toggle('active',m==='e');
+  document.getElementById('sortK').classList.toggle('active',m==='k');
+  renderNames();
+}
+
+function renderNames(){
+  let entries=Object.entries(nameCounts);
+  entries.sort((a,b)=>sortMode==='k'?(nameKm[b[0]]||0)-(nameKm[a[0]]||0):b[1]-a[1]);
+  const maxV=sortMode==='k'?Math.max(...entries.map(([n])=>nameKm[n]||0)):(entries[0]?.[1]||1);
+  entries = entries.slice(0,10);
+  document.getElementById('nameTable').innerHTML=entries.map(([name,cnt],i)=>{
+    const bv=sortMode==='k'?(nameKm[name]||0):cnt;
+    const sec=sortMode==='k'?`${(nameKm[name]||0).toLocaleString('de-DE')} km`:`${cnt}× · ${(nameKm[name]||0).toLocaleString('de-DE')} km`;
+    return `<div class="name-row"><div class="name-rank">${i+1}</div><div class="name-label blurred">${name}</div><div class="name-bar-wrap"><div class="name-bar" style="width:${maxV?bv/maxV*100:0}%"></div></div><div class="name-count">${sec}</div></div>`;
+  }).join('');
+}
+
+function addLog(t){
+  const log=document.getElementById('log');
+  const d=document.createElement('div');d.className='log-entry now';
+  d.innerHTML=`<span class="log-date">${t.date}</span><span class="log-dest">${t.dest}</span><span class="log-km">+${t.km}</span>`;
+  log.prepend(d);
+  [...log.querySelectorAll('.log-entry.now')].slice(1).forEach(e=>e.classList.remove('now'));
+}
+
+function resetPres(){
+  pPlaying=false;if(pTimer) clearTimeout(pTimer);
+  document.getElementById('playBtn').textContent='▶ Start';
+  pStep=-1;visitCount={};visitLines={};visitMarkers={};nameCounts={};nameKm={};
+  if(map){ map.eachLayer(l=>{ if(!(l instanceof L.TileLayer)) map.removeLayer(l); }); addDüsseldorfMarker(); loadNRWBorder(); }
+  document.getElementById('kmCounter').textContent='0';
+  document.getElementById('progressFill').style.width='0%';
+  document.getElementById('tripDate').textContent='–';
+  document.getElementById('tripDest').textContent='Bereit zum Starten…';
+  document.getElementById('tripKm').textContent='';
+  document.getElementById('nameTable').innerHTML='';
+  document.getElementById('log').innerHTML='';
+}
+
+
+// ══════════════════════════════
+//  STATISTICS
+// ══════════════════════════════
+let statsInited = {};
+let partnerRevealed = false;
+let partnerSort = 'km';
+let chartVerlauf=null, chartMonat=null, chartWochentag=null;
+
+const MONTH_LABELS = ['Nov 25','Dez 25','Jan 26','Feb 26','Mär 26','Apr 26','Mai 26','Jun 26','Jul 26','Aug 26','Sep 26','Okt 26'];
+const MONTH_KEYS   = ['2025-11','2025-12','2026-01','2026-02','2026-03','2026-04','2026-05','2026-06','2026-07','2026-08','2026-09','2026-10'];
+const WOCHENTAG_LABELS = ['Montag','Dienstag','Mittwoch','Donnerstag'];
+
+function parseDate(str){
+  if(!str) return null;
+  const p = str.split('.');
+  if(p.length===3) return new Date(+p[2], +p[1]-1, +p[0]);
+  return null;
+}
+
+function getMonthKey(d){ return d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` : null; }
+
+function buildStatsData(){
+  const monthKm={}, monthFahrten={}, wdFahrten={0:0,1:0,2:0,3:0}, wdKm={0:0,1:0,2:0,3:0};
+  const ortCount={}, ortKm={};
+  const partnerKm={}, partnerE={};
+
+  // cumulative
+  let cumKm=0;
+  const verlaufDates=[], verlaufKm=[];
+
+  trips.forEach(t=>{
+    const d=parseDate(t.date);
+    const mk=d?getMonthKey(d):null;
+    const km=Number(t.km)||0;
+
+    // cumulative
+    if(d){ cumKm+=km; verlaufDates.push(t.date); verlaufKm.push(cumKm); }
+
+    // month
+    if(mk){
+      monthKm[mk]=(monthKm[mk]||0)+km;
+      monthFahrten[mk]=(monthFahrten[mk]||0)+1;
+    }
+
+    // weekday Mo=0..Do=3
+    if(d){ const wd=d.getDay()-1; if(wd>=0&&wd<=3){ wdFahrten[wd]+=1; wdKm[wd]+=km; } }
+
+    // orte
+    if(t.dest){ ortCount[t.dest]=(ortCount[t.dest]||0)+1; ortKm[t.dest]=(ortKm[t.dest]||0)+km; }
+
+    // partner
+    [t.p1,t.p2,t.p3].filter(Boolean).forEach(p=>{
+      partnerKm[p]=(partnerKm[p]||0)+km;
+      partnerE[p]=(partnerE[p]||0)+1;
+    });
+  });
+
+  return {verlaufDates,verlaufKm,monthKm,monthFahrten,wdFahrten,wdKm,ortCount,ortKm,partnerKm,partnerE};
+}
+
+function showStatsTab(tab){
+  document.querySelectorAll('.stats-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.stats-content').forEach(c=>c.classList.remove('active'));
+  document.querySelectorAll('.stats-tab').forEach(b=>{
+    if(b.getAttribute('onclick')===`showStatsTab('${tab}')`){ b.classList.add('active'); }
+  });
+  document.getElementById('sc-'+tab).classList.add('active');
+  requestAnimationFrame(()=>{
+    if(!statsInited[tab]){ renderStats(tab); statsInited[tab]=true; }
+  });
+}
+
+function renderStats(tab){
+  const d=buildStatsData();
+  if(tab==='verlauf') renderVerlauf(d);
+  else if(tab==='kalender') renderKalender(d);
+  else if(tab==='monat') renderMonat(d);
+  else if(tab==='wochentag') renderWochentag(d);
+  else if(tab==='orte') renderOrte(d);
+  else if(tab==='partner') renderPartner(d);
+}
+
+const CHART_DEFAULTS = {
+  responsive:true,
+  maintainAspectRatio:false,
+  color:'#fff',
+  plugins:{legend:{labels:{color:'#8a95a8',font:{family:'DM Mono',size:11}}}},
+  scales:{
+    x:{ticks:{color:'#8a95a8',font:{family:'DM Mono',size:10}},grid:{color:'#1e2330'}},
+    y:{ticks:{color:'#8a95a8',font:{family:'DM Mono',size:10}},grid:{color:'#1e2330'}}
+  }
+};
+
+function renderVerlauf(d){
+  if(chartVerlauf) chartVerlauf.destroy();
+  chartVerlauf=new Chart(document.getElementById('chartVerlauf'),{
+    type:'line',
+    data:{
+      labels:d.verlaufDates,
+      datasets:[{
+        label:'Kumulierte km',
+        data:d.verlaufKm,
+        borderColor:'#3affb8',
+        backgroundColor:'rgba(58,255,184,0.08)',
+        fill:true,
+        tension:0.3,
+        pointRadius:3,
+        pointBackgroundColor:'#3affb8',
+      }]
+    },
+    options:{
+      ...CHART_DEFAULTS,
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:1200,easing:'easeInOutQuart'},
+      plugins:{...CHART_DEFAULTS.plugins},
+      scales:{
+        x:{...CHART_DEFAULTS.scales.x,ticks:{...CHART_DEFAULTS.scales.x.ticks,maxTicksLimit:10,maxRotation:45}},
+        y:{...CHART_DEFAULTS.scales.y,ticks:{...CHART_DEFAULTS.scales.y.ticks,callback:v=>v.toLocaleString('de-DE')+' km'}}
+      }
+    }
+  });
+}
+
+function renderMonat(d){
+  if(chartMonat) chartMonat.destroy();
+  chartMonat=new Chart(document.getElementById('chartMonat'),{
+    type:'bar',
+    data:{
+      labels:MONTH_LABELS,
+      datasets:[
+        {label:'Kilometer',data:MONTH_KEYS.map(k=>d.monthKm[k]||0),backgroundColor:'rgba(58,255,184,0.7)',yAxisID:'yKm'},
+        {label:'Fahrten',data:MONTH_KEYS.map(k=>d.monthFahrten[k]||0),backgroundColor:'rgba(232,255,58,0.7)',yAxisID:'yF',type:'bar'}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:1000,easing:'easeOutQuart'},
+      plugins:{legend:{labels:{color:'#8a95a8',font:{family:'DM Mono',size:11}}}},
+      scales:{
+        x:{ticks:{color:'#8a95a8',font:{family:'DM Mono',size:10}},grid:{color:'#1e2330'}},
+        yKm:{position:'left',ticks:{color:'#3affb8',font:{family:'DM Mono',size:10},callback:v=>v+' km'},grid:{color:'#1e2330'}},
+        yF:{position:'right',ticks:{color:'#e8ff3a',font:{family:'DM Mono',size:10}},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderWochentag(d){
+  if(chartWochentag) chartWochentag.destroy();
+  chartWochentag=new Chart(document.getElementById('chartWochentag'),{
+    type:'bar',
+    data:{
+      labels:WOCHENTAG_LABELS,
+      datasets:[
+        {label:'Fahrten',data:[0,1,2,3].map(i=>d.wdFahrten[i]),backgroundColor:'rgba(232,255,58,0.75)'},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:900,easing:'easeOutBounce'},
+      plugins:{legend:{labels:{color:'#8a95a8',font:{family:'DM Mono',size:11}}}},
+      scales:{
+        x:{ticks:{color:'#8a95a8',font:{family:'DM Mono',size:11}},grid:{color:'#1e2330'}},
+        y:{ticks:{color:'#8a95a8',font:{family:'DM Mono',size:10}},grid:{color:'#1e2330'},beginAtZero:true}
+      }
+    }
+  });
+}
+
+function renderKalender(d){
+  const tripByDate={};
+  trips.forEach(t=>{ if(t.date) tripByDate[t.date]=(tripByDate[t.date]||0)+(Number(t.km)||0); });
+  const maxKm=Math.max(...Object.values(tripByDate),1);
+
+  // Nov 2025 to Oct 2026
+  const months=[];
+  for(let m=10;m<12;m++) months.push({y:2025,m});
+  for(let m=0;m<10;m++)  months.push({y:2026,m});
+
+  const WD_SHORT=['So','Mo','Di','Mi','Do','Fr','Sa'];
+  let html='';
+  months.forEach(({y,m})=>{
+    const mLabel=new Date(y,m,1).toLocaleDateString('de-DE',{month:'short',year:'2-digit'});
+    html+=`<div class="cal-month"><div class="cal-month-name">${mLabel}</div><div class="cal-days">`;
+    WD_SHORT.forEach(wd=>html+=`<div class="cal-day-label">${wd}</div>`);
+    const first=new Date(y,m,1).getDay(); // 0=Sun
+    for(let i=0;i<first;i++) html+=`<div></div>`;
+    const days=new Date(y,m+1,0).getDate();
+    for(let day=1;day<=days;day++){
+      const dateStr=`${String(day).padStart(2,'0')}.${String(m+1).padStart(2,'0')}.${y}`;
+      const km=tripByDate[dateStr]||0;
+      let bg='#151920';
+      if(km>0){
+        const int=km/maxKm;
+        if(int<0.25) bg='#2d6a2d';
+        else if(int<0.5) bg='#4aaa4a';
+        else if(int<0.75) bg='#ffaa00';
+        else bg='#ff4422';
+      }
+      const title=km>0?`${dateStr}: ${km} km`:'';
+      html+=`<div class="cal-day${km>0?' trip':''}" style="background:${bg}" title="${title}"></div>`;
+    }
+    html+=`</div></div>`;
+  });
+  document.getElementById('calGrid').innerHTML=html;
+}
+
+function renderOrte(d){
+  const sorted=Object.entries(d.ortCount).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const maxV=sorted[0]?.[1]||1;
+  function ortColor(v){
+    if(v===1) return '#7dff7d';
+    if(v===2) return '#ffe500';
+    if(v===3) return '#ff9900';
+    if(v>=4)  return '#ff4400';
+    return '#ff0033';
+  }
+  document.getElementById('orteList').innerHTML=sorted.map(([name,cnt],i)=>`
+    <div class="ort-row">
+      <div class="ort-rank">${i+1}</div>
+      <div class="ort-name">${name}</div>
+      <div class="ort-bar-wrap"><div class="ort-bar" style="width:${cnt/maxV*100}%;background:${ortColor(cnt)}"></div></div>
+      <div class="ort-count">${cnt}×</div>
+      <div class="ort-km">${(d.ortKm[name]||0).toLocaleString('de-DE')} km</div>
+    </div>`).join('');
+}
+
+function renderPartner(d){
+  let entries=Object.entries(d.partnerKm);
+  entries=entries.map(([n,km])=>({n,km,e:d.partnerE[n]||0}));
+  if(partnerSort==='km') entries.sort((a,b)=>b.km-a.km);
+  else entries.sort((a,b)=>b.e-a.e);
+  const maxVal=partnerSort==='km'?Math.max(...entries.map(e=>e.km)):Math.max(...entries.map(e=>e.e));
+  document.getElementById('partnerList').innerHTML=entries.map((p,i)=>{
+    const barVal=partnerSort==='km'?p.km:p.e;
+    const sec=`${p.e} Einsätze · ${p.km.toLocaleString('de-DE')} km`;
+    return `<div class="partner-row">
+      <div class="partner-rank">${i+1}</div>
+      <div class="partner-name${partnerRevealed?'':' blurred'}">${p.n}</div>
+      <div class="partner-bar-wrap"><div class="partner-bar" style="width:${maxVal?barVal/maxVal*100:0}%;transition:width 0.8s"></div></div>
+      <div class="partner-val">${sec}</div>
+    </div>`;
+  }).join('');
+}
+
+function setPartnerSort(s){
+  partnerSort=s;
+  document.getElementById('pSortKm').classList.toggle('active',s==='km');
+  document.getElementById('pSortE').classList.toggle('active',s==='e');
+  statsInited['partner']=false;
+  renderStats('partner');
+  statsInited['partner']=true;
+}
+
+function togglePartnerReveal(){
+  partnerRevealed=!partnerRevealed;
+  const btn=document.getElementById('partnerRevealBtn');
+  btn.textContent=partnerRevealed?'👁 Namen verbergen':'👁 Namen anzeigen';
+  btn.classList.toggle('active',partnerRevealed);
+  statsInited['partner']=false;
+  renderStats('partner');
+  statsInited['partner']=true;
+}
+
+// Hook into switchTab to handle stats
+
+// ── Init ──
+load();
+renderTable();
+</script>
+</body>
+</html>
