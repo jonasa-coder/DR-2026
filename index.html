@@ -244,6 +244,9 @@ select{background:var(--bg);color:#fff;border:1px solid var(--border);padding:3p
     <button class="ebtn primary" onclick="addRow()">+ Fahrt hinzufügen</button>
     <button class="ebtn" onclick="openImport()">↑ Excel / CSV Import</button>
     <button class="ebtn" onclick="exportCSV()">↓ CSV Export</button>
+    <button class="ebtn primary" onclick="exportJSON()" title="Datei in GitHub als data.json hochladen, dann haben alle Geräte denselben Stand">⇩ data.json</button>
+    <button class="ebtn" onclick="forceRemote()" title="Stand aus dem GitHub-Repo laden">⟳ Repo-Stand</button>
+    <span id="geoStatus" style="font-size:0.62rem;color:var(--dim)"></span>
     <button class="ebtn danger" onclick="clearAll()">✕ Alle löschen</button>
     <div class="stats-bar">Fahrten: <span id="statFahrten">0</span> · Gesamt: <span id="statKm">0</span> km</div>
   </div>
@@ -523,6 +526,7 @@ function renderTable(){
 
 function setField(i, field, val){
   trips[i][field] = field==='km' ? Number(val)||0 : val;
+  if(field==='dest'){ delete geoFailed[val]; if(!trips[i].coords && ortCoords[val]) trips[i].coords=ortCoords[val]; setTimeout(ensureCoords,0); }
   recalcTotals();
   save();
   if(field==='km') renderTable();
@@ -629,7 +633,7 @@ function openImport(){
 
         if(trips.length && !confirm(`${newTrips.length} Fahrten importiert. Bestehende Daten ersetzen?`)) return;
         trips = newTrips;
-        recalcTotals(); save(); renderTable();
+        recalcTotals(); save(); applyKnownCoords(); renderTable(); ensureCoords();
         alert(`✓ ${newTrips.length} Fahrten erfolgreich importiert.`);
       };
       reader.readAsArrayBuffer(file);
@@ -686,7 +690,7 @@ async function resolveCoords(){
 function applyCoords(){
   const val = document.getElementById('coordResult').value;
   if(coordTargetRow!==null && val && !val.includes('Fehler') && !val.includes('Kein')){
-    trips[coordTargetRow].coords = val;
+    trips[coordTargetRow].coords = val; if(trips[coordTargetRow].dest) ortCoords[trips[coordTargetRow].dest]=val; saveOrte();
     save(); renderTable();
   }
   closeCoordModal();
@@ -1138,6 +1142,7 @@ function renderPartner(d){
   entries=entries.map(([n,km])=>({n,km,e:d.partnerE[n]||0}));
   if(partnerSort==='km') entries.sort((a,b)=>b.km-a.km);
   else entries.sort((a,b)=>b.e-a.e);
+  entries=entries.slice(0,10);
   const maxVal=partnerSort==='km'?Math.max(...entries.map(e=>e.km)):Math.max(...entries.map(e=>e.e));
   document.getElementById('partnerList').innerHTML=entries.map((p,i)=>{
     const barVal=partnerSort==='km'?p.km:p.e;
@@ -1172,9 +1177,112 @@ function togglePartnerReveal(){
 
 // Hook into switchTab to handle stats
 
+
+// ══════════════════════════════
+//  KOORDINATEN-CACHE + data.json
+// ══════════════════════════════
+const ORTE_KEY='nrw_orte_coords', BASE_KEY='nrw_base_stand';
+let ortCoords={}, geoFailed={}, geoRunning=false;
+
+function loadOrte(){ try{ ortCoords=JSON.parse(localStorage.getItem(ORTE_KEY)||'{}'); }catch(e){ ortCoords={}; } }
+function saveOrte(){ localStorage.setItem(ORTE_KEY,JSON.stringify(ortCoords)); }
+function learnCoords(){
+  trips.forEach(t=>{ if(t.dest&&t.coords&&!ortCoords[t.dest]) ortCoords[t.dest]=t.coords; });
+  saveOrte();
+}
+function applyKnownCoords(){
+  let n=0;
+  trips.forEach(t=>{ if(t.dest&&!t.coords&&ortCoords[t.dest]){ t.coords=ortCoords[t.dest]; n++; } });
+  if(n) save();
+  return n;
+}
+function setGeoStatus(msg){ const el=document.getElementById('geoStatus'); if(el) el.textContent=msg; }
+
+async function geocodeMissing(){
+  if(geoRunning) return;
+  geoRunning=true;
+  try{
+    while(true){
+      const t=trips.find(x=>x.dest&&!x.coords&&!geoFailed[x.dest]);
+      if(!t) break;
+      const open=new Set(trips.filter(x=>x.dest&&!x.coords&&!geoFailed[x.dest]).map(x=>x.dest)).size;
+      setGeoStatus(`Koordinaten werden gesucht… (${open} Orte offen)`);
+      try{
+        const q=t.dest.split('/')[0].trim()+', Nordrhein-Westfalen, Deutschland';
+        const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=de&q='+encodeURIComponent(q));
+        const data=await res.json();
+        if(data.length){
+          ortCoords[t.dest]=`${parseFloat(data[0].lat).toFixed(4)},${parseFloat(data[0].lon).toFixed(4)}`;
+          saveOrte(); applyKnownCoords();
+        } else { geoFailed[t.dest]=true; }
+      }catch(e){ geoFailed[t.dest]=true; }
+      await new Promise(r=>setTimeout(r,1100));
+    }
+  } finally {
+    geoRunning=false;
+    const failed=[...new Set(trips.filter(x=>x.dest&&!x.coords).map(x=>x.dest))];
+    setGeoStatus(failed.length?`Ohne Koordinaten: ${failed.join(', ')} (⌖ manuell)`:'');
+    if(document.getElementById('editorView').classList.contains('active')) renderTable();
+  }
+}
+function ensureCoords(){ learnCoords(); applyKnownCoords(); geocodeMissing(); }
+
+function exportJSON(){
+  learnCoords();
+  const out={
+    stand:new Date().toISOString(),
+    trips:trips.map(t=>({date:t.date,dest:t.dest,km:Number(t.km)||0,p1:t.p1||'',p2:t.p2||'',p3:t.p3||'',coords:t.coords||''})),
+    orte:ortCoords
+  };
+  const blob=new Blob([JSON.stringify(out,null,1)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='data.json'; a.click();
+  localStorage.setItem(BASE_KEY,out.stand);
+}
+
+function applyRemote(d){
+  trips=d.trips.map(t=>({date:t.date||'',dest:t.dest||'',km:Number(t.km)||0,p1:t.p1||'',p2:t.p2||'',p3:t.p3||'',coords:t.coords||''}));
+  Object.entries(d.orte||{}).forEach(([k,v])=>{ if(!ortCoords[k]) ortCoords[k]=v; });
+  recalcTotals(); renderTable(); ensureCoords();
+}
+
+async function fetchRemote(){
+  const res=await fetch('data.json?'+Date.now(),{cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const d=await res.json();
+  if(!d||!Array.isArray(d.trips)) throw new Error('Format');
+  return d;
+}
+
+async function loadRemote(){
+  try{
+    const d=await fetchRemote();
+    const hasLocal=!!localStorage.getItem(STORAGE_KEY);
+    const seen=localStorage.getItem(BASE_KEY);
+    if(!hasLocal){ applyRemote(d); localStorage.setItem(BASE_KEY,d.stand||''); return; }
+    if(d.stand===seen) return; // lokaler Stand baut auf diesem Repo-Stand auf
+    const ok=confirm('Im Repo liegt ein neuer data.json-Stand.\n\nOK = neuen Stand laden (lokale Änderungen gehen verloren)\nAbbrechen = lokalen Stand behalten');
+    if(ok){ localStorage.removeItem(STORAGE_KEY); applyRemote(d); }
+    localStorage.setItem(BASE_KEY,d.stand||'');
+  }catch(e){ /* keine data.json vorhanden (z.B. lokal geöffnet): eingebaute Daten nutzen */ }
+}
+
+async function forceRemote(){
+  try{
+    const d=await fetchRemote();
+    if(localStorage.getItem(STORAGE_KEY) && !confirm('Lokale Änderungen durch den Repo-Stand ersetzen?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.setItem(BASE_KEY,d.stand||'');
+    applyRemote(d);
+  }catch(e){ alert('Keine data.json gefunden. Sie muss im selben GitHub-Ordner wie index.html liegen.'); }
+}
+
 // ── Init ──
+loadOrte();
 load();
 renderTable();
+ensureCoords();
+loadRemote();
 </script>
 </body>
 </html>
